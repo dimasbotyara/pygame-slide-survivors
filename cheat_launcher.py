@@ -287,6 +287,25 @@ class DevConsole:
                 if not p: raise Exception("no player")
                 self.log(f"({_fmt(p.x)}, {_fmt(p.y)})", CYAN)
 
+            elif c == "ult":
+                t.act_fill_ult()
+                self.log("⚡ Ultimate charged to 100%", GOLD)
+
+            elif c == "hero":
+                if len(parts) > 1:
+                    t.act_switch_hero(parts[1].lower())
+                else:
+                    self.log("Usage: hero <slider|brawler|spark|shadow>", RED)
+
+            elif c == "ach":
+                sub = parts[1].lower() if len(parts) > 1 else ""
+                if sub in ["unlockall", "all"]:
+                    t.act_unlock_all_achievements()
+                elif sub in ["clear", "reset"]:
+                    t.act_reset_achievements()
+                else:
+                    self.log("Usage: ach <unlockall|clear>", RED)
+
             else:
                 self.log(f"Unknown command: {c}. Type 'help'.", RED)
 
@@ -441,6 +460,17 @@ class Trainer:
                 self._action("Use Heal",            lambda: self.action_use_item("heal")),
                 self._action("Use Speed Boost",     lambda: self.action_use_item("speed_boost")),
             ]},
+            {"name": "HEROES", "items": [
+                self._action("Switch to SLIDER",     lambda: self.act_switch_hero("slider")),
+                self._action("Switch to BRAWLER",    lambda: self.act_switch_hero("brawler")),
+                self._action("Switch to SPARK",      lambda: self.act_switch_hero("spark")),
+                self._action("Switch to SHADOW",     lambda: self.act_switch_hero("shadow")),
+                self._action("⚡ Fill Ultimate (100%)", self.act_fill_ult),
+            ]},
+            {"name": "ACHIEVEMENTS", "items": [
+                self._action("🏆 Unlock ALL achievements", self.act_unlock_all_achievements),
+                self._action("🔒 Reset achievements",       self.act_reset_achievements),
+            ]},
             {"name": "PROGRESS", "items": [
                 self._choice("XP multiplier x",     "xp_multiplier",
                              [1.0, 2.0, 5.0, 10.0, 50.0]),
@@ -572,6 +602,41 @@ class Trainer:
         for _ in range(n):
             p.gain_xp(p.xp_to_next + 1)
         self._msg(f"+{n} level(s) -> {p.level}", YELLOW)
+
+    def act_switch_hero(self, hero_id):
+        p = self._need_player()
+        if not p:
+            return
+        from heroes import HEROES
+        if hero_id in HEROES:
+            h = HEROES[hero_id]
+            p.hero_id = hero_id
+            p.color = h["color"]
+            p.outline_color = h["outline_color"]
+            self._msg(f"Switched hero to: {hero_id.upper()}", CYAN)
+
+    def act_fill_ult(self):
+        p = self._need_player()
+        if p:
+            p.ult_charge = 100.0
+            self._msg("⚡ Ultimate 100% Ready!", GOLD)
+
+    def act_unlock_all_achievements(self):
+        g = self.game
+        ach = getattr(g, "achievement_manager", None)
+        if ach:
+            from achievements import ACHIEVEMENTS_LIST
+            for aid in ACHIEVEMENTS_LIST:
+                ach.unlock(aid)
+            self._msg("🏆 All Achievements Unlocked!", GOLD)
+
+    def act_reset_achievements(self):
+        g = self.game
+        ach = getattr(g, "achievement_manager", None)
+        if ach:
+            ach.unlocked = set()
+            ach.save()
+            self._msg("🔒 Achievements Reset", LIGHT_GRAY)
 
     def act_clear_proj(self):
         projs = getattr(self.game, "enemy_projectiles", None)

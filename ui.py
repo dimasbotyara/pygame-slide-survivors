@@ -256,55 +256,90 @@ class UI:
     # МИНИ-КАРТА
     # ================================================================
     def draw_minimap(self, screen, player, enemies, xp_orbs, dropped_items, bosses_alive):
-        mm_x = SCREEN_WIDTH - MINIMAP_SIZE - MINIMAP_MARGIN
-        mm_y = SCREEN_HEIGHT - MINIMAP_SIZE - MINIMAP_MARGIN - UI_XP_BAR_HEIGHT
+        mm_size = MINIMAP_SIZE
+        mm_x = SCREEN_WIDTH - mm_size - MINIMAP_MARGIN
+        mm_y = SCREEN_HEIGHT - mm_size - MINIMAP_MARGIN - UI_XP_BAR_HEIGHT - 5
+        center = mm_size // 2
+        radius = center - 3
 
-        mm_surface = pygame.Surface((MINIMAP_SIZE, MINIMAP_SIZE), pygame.SRCALPHA)
-        mm_surface.fill((0, 0, 0, MINIMAP_BG_ALPHA))
+        mm_surface = pygame.Surface((mm_size, mm_size), pygame.SRCALPHA)
 
-        center = MINIMAP_SIZE // 2
+        # Тёмный прозрачный круговой фон
+        pygame.draw.circle(mm_surface, (12, 16, 32, 210), (center, center), radius)
 
+        # Радарная сетка (концентрические круги)
+        pygame.draw.circle(mm_surface, (0, 220, 255, 45), (center, center), int(radius * 0.66), 1)
+        pygame.draw.circle(mm_surface, (0, 220, 255, 25), (center, center), int(radius * 0.33), 1)
+
+        # Перекрестие (север-юг-запад-восток)
+        pygame.draw.line(mm_surface, (0, 220, 255, 40), (center, 6), (center, mm_size - 6), 1)
+        pygame.draw.line(mm_surface, (0, 220, 255, 40), (6, center), (mm_size - 6, center), 1)
+
+        # Вращающийся луч радара
+        t_time = pygame.time.get_ticks() / 1000.0
+        sweep_angle = (t_time * 2.2) % (math.pi * 2)
+        end_x = center + int(math.cos(sweep_angle) * radius)
+        end_y = center + int(math.sin(sweep_angle) * radius)
+        pygame.draw.line(mm_surface, (0, 255, 220, 70), (center, center), (end_x, end_y), 2)
+
+        # Опыт (XP gems)
         for orb in xp_orbs:
             dx = (orb.x - player.x) * MINIMAP_SCALE
             dy = (orb.y - player.y) * MINIMAP_SCALE
-            mx = int(center + dx)
-            my = int(center + dy)
-            if 0 <= mx < MINIMAP_SIZE and 0 <= my < MINIMAP_SIZE:
-                mm_surface.set_at((mx, my), MINIMAP_XP_COLOR)
+            if dx * dx + dy * dy <= radius * radius:
+                mx = int(center + dx)
+                my = int(center + dy)
+                pygame.draw.circle(mm_surface, (255, 240, 80, 220), (mx, my), 1)
 
+        # Выпавшие предметы (Health, Bomb, Magnet...)
         for item in dropped_items:
             dx = (item.x - player.x) * MINIMAP_SCALE
             dy = (item.y - player.y) * MINIMAP_SCALE
-            mx = int(center + dx)
-            my = int(center + dy)
-            if 2 <= mx < MINIMAP_SIZE - 2 and 2 <= my < MINIMAP_SIZE - 2:
-                pygame.draw.rect(mm_surface, MINIMAP_ITEM_COLOR, (mx - 1, my - 1, 3, 3))
+            if dx * dx + dy * dy <= radius * radius:
+                mx = int(center + dx)
+                my = int(center + dy)
+                pygame.draw.circle(mm_surface, GREEN, (mx, my), 2)
 
+        # Враги и Боссы + Указатель на Закадрового Босса
         for enemy in enemies:
             if not enemy.alive:
                 continue
             dx = (enemy.x - player.x) * MINIMAP_SCALE
             dy = (enemy.y - player.y) * MINIMAP_SCALE
-            mx = int(center + dx)
-            my = int(center + dy)
-            if 1 <= mx < MINIMAP_SIZE - 1 and 1 <= my < MINIMAP_SIZE - 1:
+            dist_sq = dx * dx + dy * dy
+
+            if dist_sq <= radius * radius:
+                mx = int(center + dx)
+                my = int(center + dy)
                 if enemy.is_boss:
-                    pygame.draw.circle(mm_surface, MINIMAP_BOSS_COLOR, (mx, my), 4)
+                    boss_pulse = 4 + int(abs(math.sin(t_time * 6)) * 3)
+                    pygame.draw.circle(mm_surface, (255, 40, 80), (mx, my), boss_pulse)
+                    pygame.draw.circle(mm_surface, GOLD, (mx, my), boss_pulse, 1)
                 else:
-                    pygame.draw.rect(mm_surface, MINIMAP_ENEMY_COLOR, (mx, my, 2, 2))
+                    pygame.draw.rect(mm_surface, RED, (mx - 1, my - 1, 2, 2))
+            elif enemy.is_boss:
+                # Стрелка-указатель на босса на краю радара
+                angle = math.atan2(dy, dx)
+                edge_x = center + int(math.cos(angle) * (radius - 8))
+                edge_y = center + int(math.sin(angle) * (radius - 8))
+                pulse_color = (255, 0, 100) if (int(t_time * 8) % 2 == 0) else GOLD
+                pygame.draw.circle(mm_surface, pulse_color, (edge_x, edge_y), 5)
+                pygame.draw.circle(mm_surface, WHITE, (edge_x, edge_y), 5, 1)
 
-        pygame.draw.circle(mm_surface, MINIMAP_PLAYER_COLOR, (center, center), 3)
+        # Игрок (Стрелка направления движения)
+        vx, vy = getattr(player, 'vx', 0), getattr(player, 'vy', 0)
+        p_angle = math.atan2(vy, vx) if (vx != 0 or vy != 0) else -math.pi / 2
+        p_front_x = center + int(math.cos(p_angle) * 7)
+        p_front_y = center + int(math.sin(p_angle) * 7)
+        p_left_x = center + int(math.cos(p_angle + 2.4) * 5)
+        p_left_y = center + int(math.sin(p_angle + 2.4) * 5)
+        p_right_x = center + int(math.cos(p_angle - 2.4) * 5)
+        p_right_y = center + int(math.sin(p_angle - 2.4) * 5)
+        pygame.draw.polygon(mm_surface, CYAN, [(p_front_x, p_front_y), (p_left_x, p_left_y), (p_right_x, p_right_y)])
+        pygame.draw.polygon(mm_surface, WHITE, [(p_front_x, p_front_y), (p_left_x, p_left_y), (p_right_x, p_right_y)], 1)
 
-        for enemy in enemies:
-            if hasattr(enemy, 'arena_active') and enemy.arena_active and enemy.alive:
-                arena_dx = (enemy.arena_center_x - player.x) * MINIMAP_SCALE
-                arena_dy = (enemy.arena_center_y - player.y) * MINIMAP_SCALE
-                arena_mx = int(center + arena_dx)
-                arena_my = int(center + arena_dy)
-                arena_r = int(BOSS_ARENA_RADIUS * MINIMAP_SCALE)
-                pygame.draw.circle(mm_surface, PURPLE, (arena_mx, arena_my), arena_r, 1)
-
-        pygame.draw.rect(mm_surface, GRAY, (0, 0, MINIMAP_SIZE, MINIMAP_SIZE), 1)
+        # Внешнее неоновое кольцо радара
+        pygame.draw.circle(mm_surface, (0, 220, 255), (center, center), radius, 2)
 
         screen.blit(mm_surface, (mm_x, mm_y))
 
@@ -328,12 +363,40 @@ class UI:
 
         for i, upgrade in enumerate(choices):
             box_x = start_x + i * (UI_UPGRADE_BOX_WIDTH + 20)
-            box_y = SCREEN_HEIGHT // 2 - UI_UPGRADE_BOX_HEIGHT // 2
-            self._draw_upgrade_box(screen, upgrade, box_x, box_y, i == selected_index, i + 1)
+            box_y = 200
+            rect = pygame.Rect(box_x, box_y, UI_UPGRADE_BOX_WIDTH, UI_UPGRADE_BOX_HEIGHT)
+
+            is_selected = (i == selected_index)
+
+            bg_color = (40, 40, 60) if is_selected else (25, 25, 40)
+            pygame.draw.rect(screen, bg_color, rect)
+
+            border_color = YELLOW if is_selected else GRAY
+            border_w = 4 if is_selected else 2
+            pygame.draw.rect(screen, border_color, rect, border_w)
+
+            # Категория / Значок
+            icon_box = pygame.Rect(box_x + 15, box_y + 15, 40, 40)
+            pygame.draw.rect(screen, upgrade.icon_color, icon_box)
+            pygame.draw.rect(screen, WHITE, icon_box, 2)
+
+            cat_str = f"[{upgrade.category.upper()}]"
+            cat_s = self.font_small.render(cat_str, True, GOLD if upgrade.category == "hero" else LIGHT_GRAY)
+            screen.blit(cat_s, (box_x + 65, box_y + 18))
+
+            name_surface = self.font.render(upgrade.name, True, WHITE)
+            screen.blit(name_surface, (box_x + 65, box_y + 35))
+
+            desc_surface = self.font_small.render(upgrade.description, True, LIGHT_GRAY)
+            screen.blit(desc_surface, (box_x + 15, box_y + 70))
+
+            level_str = t("UPGRADE_MAX") if upgrade.max_level and upgrade.current_level >= upgrade.max_level else t("UPGRADE_LEVEL", upgrade.current_level + 1)
+            level_surface = self.font_small.render(level_str, True, GOLD if is_selected else GRAY)
+            screen.blit(level_surface, (box_x + 15, box_y + 110))
 
         hint_text = t("UPGRADE_HINT")
-        hint_surface = self.font_small.render(hint_text, True, LIGHT_GRAY)
-        hint_rect = hint_surface.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 80))
+        hint_surface = self.font_small.render(hint_text, True, GRAY)
+        hint_rect = hint_surface.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 100))
         screen.blit(hint_surface, hint_rect)
 
     def _draw_upgrade_box(self, screen, upgrade, x, y, selected, number):
@@ -396,7 +459,7 @@ class UI:
         screen.fill((15, 15, 30))
 
         title = self.font_large.render(t("HERO_SELECT_TITLE"), True, CYAN)
-        title_rect = title.get_rect(center=(SCREEN_WIDTH // 2, 70))
+        title_rect = title.get_rect(center=(SCREEN_WIDTH // 2, 50))
         screen.blit(title, title_rect)
 
         box_w = 260
@@ -570,29 +633,35 @@ class UI:
     # ================================================================
     # ГЛАВНОЕ МЕНЮ
     # ================================================================
-    def draw_main_menu(self, screen, selected_option):
-        screen.fill((15, 15, 30))
+    def draw_main_menu(self, screen, selected_option, selected_hero_index=0):
+        screen.fill((12, 14, 28))
 
-        t_time = pygame.time.get_ticks() / 1000
-        for i in range(20):
-            px = int((math.sin(t_time * 0.5 + i * 0.7) * 0.5 + 0.5) * SCREEN_WIDTH)
-            py = int((math.cos(t_time * 0.3 + i * 1.1) * 0.5 + 0.5) * SCREEN_HEIGHT)
-            alpha = int(abs(math.sin(t_time + i)) * 80)
-            s = pygame.Surface((4, 4), pygame.SRCALPHA)
-            s.fill((100, 200, 255, alpha))
+        t_time = pygame.time.get_ticks() / 1000.0
+
+        # Анимированный динамический фон (дрейфующие неоновые частицы)
+        for i in range(35):
+            px = int((math.sin(t_time * 0.4 + i * 0.7) * 0.5 + 0.5) * SCREEN_WIDTH)
+            py = int((math.cos(t_time * 0.25 + i * 1.1) * 0.5 + 0.5) * SCREEN_HEIGHT)
+            alpha = int(abs(math.sin(t_time * 1.5 + i)) * 110)
+            size = 3 if i % 2 == 0 else 5
+            s = pygame.Surface((size, size), pygame.SRCALPHA)
+            color = (0, 220, 255, alpha) if i % 3 == 0 else (255, 200, 50, alpha)
+            s.fill(color)
             screen.blit(s, (px, py))
 
+        # Заголовок игры с неоновой тенью
         title = self.font_title.render(t("TITLE"), True, CYAN)
-        title_rect = title.get_rect(center=(SCREEN_WIDTH // 2, 110))
+        title_rect = title.get_rect(center=(SCREEN_WIDTH // 2 - 120, 100))
 
         shadow = self.font_title.render(t("TITLE"), True, DARK_BLUE)
-        screen.blit(shadow, (title_rect.x + 3, title_rect.y + 3))
+        screen.blit(shadow, (title_rect.x + 4, title_rect.y + 4))
         screen.blit(title, title_rect)
 
-        subtitle = self.font.render(t("SUBTITLE"), True, LIGHT_GRAY)
-        sub_rect = subtitle.get_rect(center=(SCREEN_WIDTH // 2, 170))
+        subtitle = self.font.render(t("SUBTITLE"), True, GOLD)
+        sub_rect = subtitle.get_rect(center=(SCREEN_WIDTH // 2 - 120, 160))
         screen.blit(subtitle, sub_rect)
 
+        # Меню слева
         menu_items = [
             t("MENU_PLAY"),
             t("MENU_HEROES"),
@@ -603,30 +672,65 @@ class UI:
             t("MENU_EXIT"),
         ]
 
+        menu_x = SCREEN_WIDTH // 2 - 120
+
         for i, item in enumerate(menu_items):
-            y = 240 + i * 50
+            y = 230 + i * 48
             is_selected = (i == selected_option)
 
             color = YELLOW if is_selected else WHITE
             font = self.font_large if is_selected else self.font_medium
 
             text = font.render(item, True, color)
-            text_rect = text.get_rect(center=(SCREEN_WIDTH // 2, y))
+            text_rect = text.get_rect(center=(menu_x, y))
 
             if is_selected:
                 highlight = pygame.Rect(
-                    text_rect.x - 20, text_rect.y - 5,
-                    text_rect.width + 40, text_rect.height + 10
+                    text_rect.x - 25, text_rect.y - 6,
+                    text_rect.width + 50, text_rect.height + 12
                 )
-                pygame.draw.rect(screen, (30, 30, 50), highlight)
-                pygame.draw.rect(screen, YELLOW, highlight, 2)
+                pygame.draw.rect(screen, (35, 45, 75), highlight, border_radius=6)
+                pygame.draw.rect(screen, YELLOW, highlight, 2, border_radius=6)
 
                 arrow_l = self.font_large.render("►", True, YELLOW)
-                screen.blit(arrow_l, (highlight.x - 30, text_rect.y))
+                screen.blit(arrow_l, (highlight.x - 32, text_rect.y))
 
             screen.blit(text, text_rect)
 
-        hint = self.font_small.render(t("MENU_HINT"), True, GRAY)
+        # Карточка выбранного героя (справа от меню)
+        hero_key = HERO_KEYS[selected_hero_index] if 0 <= selected_hero_index < len(HERO_KEYS) else HERO_KEYS[0]
+        h_data = HEROES.get(hero_key, HEROES["slider"])
+
+        card_w, card_h = 240, 310
+        card_x = SCREEN_WIDTH - card_w - 60
+        card_y = 180
+        card_rect = pygame.Rect(card_x, card_y, card_w, card_h)
+
+        pygame.draw.rect(screen, (22, 28, 48), card_rect, border_radius=12)
+        pygame.draw.rect(screen, CYAN, card_rect, 2, border_radius=12)
+
+        # Аватар героя
+        cx = card_x + card_w // 2
+        cy = card_y + 55
+        pygame.draw.circle(screen, h_data["color"], (cx, cy), 35)
+        pygame.draw.circle(screen, h_data["outline_color"], (cx, cy), 35, 3)
+
+        # Данные героя
+        h_name = self.font.render(t(f"hero_{hero_key}_name"), True, WHITE)
+        screen.blit(h_name, h_name.get_rect(center=(cx, card_y + 110)))
+
+        h_sub = self.font_small.render(t(f"hero_{hero_key}_sub"), True, GOLD)
+        screen.blit(h_sub, h_sub.get_rect(center=(cx, card_y + 135)))
+
+        ult_name = t(f"{h_data['ult_id']}_name")
+        ult_lbl = self.font_small.render(f"⚡ {ult_name}", True, CYAN)
+        screen.blit(ult_lbl, ult_lbl.get_rect(center=(cx, card_y + 175)))
+
+        change_hint = self.font_small.render(t("MENU_HEROES"), True, GRAY)
+        screen.blit(change_hint, change_hint.get_rect(center=(cx, card_y + 270)))
+
+        # Подсказка снизу
+        hint = self.font_small.render(f"{t('MENU_HINT')}  |  [F1] Trainer", True, GRAY)
         hint_rect = hint.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 25))
         screen.blit(hint, hint_rect)
 

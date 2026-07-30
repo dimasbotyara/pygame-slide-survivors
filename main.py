@@ -243,7 +243,7 @@ class Game:
                         self.running = False
 
     def draw_menu(self):
-        self.ui.draw_main_menu(self.screen, self.menu_selection)
+        self.ui.draw_main_menu(self.screen, self.menu_selection, self.selected_hero_index)
 
     # ================================================================
     # ЭКРАН НАСТРОЕК
