@@ -1,0 +1,854 @@
+# player.py — v4 — МОЩНЫЕ кулаки, мега-удары, ярость, волны
+
+import pygame
+import math
+import random as rng_module
+from settings import *
+
+
+class FistWave:
+    """Волна от удара кулаком — летит вперёд и наносит урон"""
+    def __init__(self, x, y, angle, damage, speed, max_range, width):
+        self.x = float(x)
+        self.y = float(y)
+        self.start_x = x
+        self.start_y = y
+        self.angle = angle
+        self.dir_x = math.cos(angle)
+        self.dir_y = math.sin(angle)
+        self.damage = damage
+        self.speed = speed
+        self.max_range = max_range
+        self.width = width
+        self.alive = True
+        self.hit_enemies = []
+        self.distance_traveled = 0.0
+
+    def update(self, dt):
+        if not self.alive:
+            return
+        move = self.speed * dt
+        self.x += self.dir_x * move
+        self.y += self.dir_y * move
+        self.distance_traveled += move
+        if self.distance_traveled >= self.max_range:
+            self.alive = False
+
+    def draw(self, screen, camera):
+        if not self.alive:
+            return
+        sx, sy = camera.apply(self.x, self.y)
+        sx, sy = int(sx), int(sy)
+
+        alpha = 1.0 - self.distance_traveled / self.max_range
+        w = int(self.width * alpha)
+        if w < 2:
+            return
+
+        # Дуга/полумесяц
+        perp_x = -self.dir_y
+        perp_y = self.dir_x
+
+        points = []
+        segments = 8
+        for i in range(segments + 1):
+            t = (i / segments - 0.5) * 2
+            px = sx + int(perp_x * t * w)
+            py = sy + int(perp_y * t * w)
+            # Выпуклость вперёд
+            bulge = (1 - t * t) * w * 0.3
+            px += int(self.dir_x * bulge)
+            py += int(self.dir_y * bulge)
+            points.append((px, py))
+
+        if len(points) >= 2:
+            cv = int(255 * alpha)
+            color = (cv, cv // 2, 0)
+            pygame.draw.lines(screen, color, False, points, max(1, int(3 * alpha)))
+
+            # Центральная точка
+            pygame.draw.circle(screen, YELLOW, (sx, sy), max(2, int(4 * alpha)))
+
+
+class Player:
+    def __init__(self, x, y):
+        self.x = float(x)
+        self.y = float(y)
+
+        self.max_hp = PLAYER_BASE_HP
+        self.hp = self.max_hp
+        self.base_speed = PLAYER_BASE_SPEED
+        self.size = PLAYER_BASE_SIZE
+
+        self.stats = {
+            "max_hp": 0, "hp_regen": 0.0, "move_speed": 0, "armor": 0,
+            "xp_radius": 0, "luck": 0,
+            "damage": 0, "attack_speed": 0, "attack_range": 0,
+            "crit_chance": 5, "crit_multiplier": 50, "target_count": 0,
+            "fist_combo_hits": 0, "fist_lifesteal": 0, "fist_stun_chance": 0,
+            "fist_rage": 0, "fist_ground_slam": 0, "fist_counter_attack": 0,
+            "fist_arc_bonus": 0, "fist_wave": 0, "fist_xp_pull": 0,
+            "slide_speed": 0, "slide_duration": 0, "slide_cooldown": 0,
+            "slide_damage": 0, "slide_knockback_radius": 0, "slide_charges": 0,
+            "slide_kill_reset_chance": 0, "slide_turn_speed": 0,
+            "slide_invincibility_after": 0.0,
+            "slide_electric_trail": 0, "slide_shockwave": 0,
+            "xp_multiplier": 0, "drop_chance": 0, "heal_effectiveness": 0,
+            "aura_damage": 0.0, "aura_slow": 0, "block_chance": 0, "thorns": 0,
+            "projectile_count": 0, "projectile_spread": 0,
+            "effect_duration": 0, "pierce": 0,
+        }
+
+        # Скольжение
+        self.is_sliding = False
+        self.slide_timer = 0.0
+        self.slide_cooldown_timer = 0.0
+        self.slide_charges = 1
+        self.slide_max_charges = 1
+        self.slide_direction_x = 0.0
+        self.slide_direction_y = 0.0
+        self.slide_current_speed = 0.0
+        self.slide_angle = 0.0
+        self.slide_was_pressed = False
+        self.slide_needs_repress = False
+
+        # Dash
+        self.dash_attack_window_timer = 0.0
+        self.dash_attack_active = False
+        self.dash_attack_timer = 0.0
+        self.dash_attack_duration = 0.2
+        self.dash_attack_hit_enemies = []
+        self.dash_attack_triggered = False
+
+        # Kill комбо
+        self.combo_count = 0
+        self.combo_timer = 0.0
+        self.combo_max_reached = 0
+
+        # Кулаки
+        self.fist_combo_index = 0
+        self.fist_combo_timer = 0.0
+        self.fist_cooldown_timer = 0.0
+        self.fist_attack_active = False
+        self.fist_attack_timer = 0.0
+        self.fist_attack_duration = 0.12
+        self.fist_hit_enemies = []
+        self.fist_which_hand = 0
+        self.fist_total_hits = 0  # общий счётчик ударов для мега-удара
+        self.fist_is_mega = False  # текущий удар — мега?
+
+        # Волны от кулаков
+        self.fist_waves = []
+
+        # Контратака
+        self.counter_attack_active = False
+        self.counter_attack_timer = 0.0
+        self.counter_attack_duration = 0.15
+        self.counter_attack_hit_enemies = []
+        self.counter_invincible_timer = 0.0
+
+        # Shockwave & electric
+        self.shockwaves = []
+        self.electric_trails = []
+
+        # Движение
+        self.velocity_x = 0.0
+        self.velocity_y = 0.0
+        self.current_speed = 0.0
+        self.facing_angle = 0.0
+
+        # Неуязвимость
+        self.invincible_timer = 0.0
+        self.slide_invincible_after_timer = 0.0
+
+        # Опыт
+        self.level = 1
+        self.xp = 0
+        self.xp_to_next = XP_BASE_TO_LEVEL
+        self.pending_levels = 0
+
+        # Временные
+        self.speed_boost_timer = 0.0
+        self.speed_boost_multiplier = 1.0
+
+        self.level_up_rings = []
+        self.color = PLAYER_COLOR
+        self.flash_timer = 0.0
+        self.body_anim_timer = 0.0
+        self.rage_intensity = 0.0
+
+        self.enemies_killed = 0
+        self.damage_dealt = 0
+        self.time_alive = 0.0
+
+    # ================================================================
+    # СТАТЫ
+    # ================================================================
+    def get_max_hp(self):
+        return PLAYER_BASE_HP + self.stats["max_hp"]
+
+    def get_move_speed(self):
+        base = PLAYER_BASE_SPEED * (1 + self.stats["move_speed"] / 100)
+        if self.speed_boost_timer > 0:
+            base *= self.speed_boost_multiplier
+        return base
+
+    def get_xp_radius(self):
+        return XP_PICKUP_RADIUS_BASE * (1 + self.stats["xp_radius"] / 100)
+
+    def get_fist_damage(self):
+        base = FIST_BASE_DAMAGE * (1 + self.stats["damage"] / 100)
+        # Ярость
+        if self.stats["fist_rage"] > 0:
+            hp_ratio = self.hp / self.max_hp
+            if hp_ratio < FIST_RAGE_THRESHOLD:
+                rage_progress = 1.0 - (hp_ratio / FIST_RAGE_THRESHOLD)
+                rage_bonus = FIST_RAGE_MAX_BONUS * (self.stats["fist_rage"] / 100) * rage_progress
+                base *= (1 + rage_bonus / 100)
+        return base
+
+    def get_fist_attack_speed(self):
+        base = FIST_BASE_ATTACK_SPEED * (1 + self.stats["attack_speed"] / 100)
+        # Ярость бонус к скорости атаки
+        if self.stats["fist_rage"] > 0:
+            hp_ratio = self.hp / self.max_hp
+            if hp_ratio < FIST_RAGE_THRESHOLD:
+                rage_progress = 1.0 - (hp_ratio / FIST_RAGE_THRESHOLD)
+                speed_bonus = FIST_RAGE_ATTACK_SPEED_BONUS * (self.stats["fist_rage"] / 100) * rage_progress
+                base *= (1 + speed_bonus / 100)
+        return base
+
+    def get_fist_range(self):
+        return FIST_BASE_RANGE * (1 + self.stats["attack_range"] / 100)
+
+    def get_fist_combo_max(self):
+        return FIST_COMBO_HITS + self.stats["fist_combo_hits"]
+
+    def get_fist_stun_chance(self):
+        return self.stats["fist_stun_chance"]
+
+    def get_fist_lifesteal(self):
+        return self.stats["fist_lifesteal"]
+
+    def get_fist_arc(self, combo_index):
+        if combo_index < len(FIST_COMBO_ARC):
+            base_arc = FIST_COMBO_ARC[combo_index]
+        else:
+            base_arc = FIST_COMBO_ARC[-1]
+        return base_arc + self.stats["fist_arc_bonus"]
+
+    def get_fist_damage_for_hit(self, combo_index):
+        base = self.get_fist_damage()
+        if self.fist_is_mega:
+            return base * FIST_MEGA_DAMAGE_MULTIPLIER
+        if combo_index < len(FIST_COMBO_DAMAGE_MULTIPLIERS):
+            return base * FIST_COMBO_DAMAGE_MULTIPLIERS[combo_index]
+        return base * FIST_COMBO_DAMAGE_MULTIPLIERS[-1]
+
+    def get_fist_knockback_for_hit(self, combo_index):
+        base = FIST_KNOCKBACK
+        if self.fist_is_mega:
+            return base * FIST_MEGA_KNOCKBACK_MULTIPLIER
+        if combo_index < len(FIST_COMBO_KNOCKBACK_MULTIPLIERS):
+            return base * FIST_COMBO_KNOCKBACK_MULTIPLIERS[combo_index]
+        return base * FIST_COMBO_KNOCKBACK_MULTIPLIERS[-1]
+
+    def get_fist_range_for_hit(self, combo_index):
+        base = self.get_fist_range()
+        if self.fist_is_mega:
+            return base * FIST_MEGA_RANGE_MULTIPLIER
+        if combo_index < len(FIST_COMBO_RANGE_MULTIPLIERS):
+            return base * FIST_COMBO_RANGE_MULTIPLIERS[combo_index]
+        return base * FIST_COMBO_RANGE_MULTIPLIERS[-1]
+
+    def get_slide_initial_speed(self):
+        return self.get_move_speed() * SLIDE_INITIAL_SPEED_MULTIPLIER * (1 + self.stats["slide_speed"] / 100)
+
+    def get_slide_duration(self):
+        return SLIDE_DURATION * (1 + self.stats["slide_duration"] / 100)
+
+    def get_slide_cooldown(self):
+        return SLIDE_COOLDOWN * max(0.1, (1 - self.stats["slide_cooldown"] / 100))
+
+    def get_slide_knockback_damage(self):
+        base = SLIDE_BASE_KNOCKBACK_DAMAGE * (1 + self.stats["slide_damage"] / 100)
+        return base + self.slide_current_speed * SLIDE_SPEED_DAMAGE_MULTIPLIER
+
+    def get_slide_knockback_radius(self):
+        return SLIDE_KNOCKBACK_RADIUS + self.size + self.stats["slide_knockback_radius"]
+
+    def get_slide_turn_speed(self):
+        return SLIDE_TURN_SPEED * (1 + self.stats["slide_turn_speed"] / 100)
+
+    def get_slide_max_charges(self):
+        return 1 + self.stats["slide_charges"]
+
+    def get_armor(self):
+        return self.stats["armor"]
+
+    def get_crit_chance(self):
+        return self.stats["crit_chance"] + self.stats["luck"]
+
+    def get_crit_multiplier(self):
+        return 1.0 + self.stats["crit_multiplier"] / 100
+
+    def get_xp_multiplier(self):
+        return 1.0 + self.stats["xp_multiplier"] / 100
+
+    def get_heal_effectiveness(self):
+        return 1.0 + self.stats["heal_effectiveness"] / 100
+
+    def get_combo_xp_bonus(self):
+        return min(self.combo_count * COMBO_XP_BONUS_PER_STACK, COMBO_MAX_MULTIPLIER)
+
+    def get_dash_attack_damage(self):
+        return self.get_fist_damage() * DASH_ATTACK_DAMAGE_MULTIPLIER
+
+    def get_dash_attack_range(self):
+        return self.get_fist_range() * DASH_ATTACK_RANGE_MULTIPLIER
+
+    def get_rage_intensity(self):
+        if self.stats["fist_rage"] <= 0:
+            return 0.0
+        hp_ratio = self.hp / self.max_hp
+        if hp_ratio >= FIST_RAGE_THRESHOLD:
+            return 0.0
+        return 1.0 - (hp_ratio / FIST_RAGE_THRESHOLD)
+
+    # ================================================================
+    # UPDATE
+    # ================================================================
+    def update(self, dt, keys, mouse_pos, camera):
+        self.time_alive += dt
+        self.body_anim_timer += dt
+
+        new_max = self.get_max_hp()
+        if new_max != self.max_hp:
+            hp_diff = new_max - self.max_hp
+            self.max_hp = new_max
+            self.hp = min(self.hp + max(0, hp_diff), self.max_hp)
+
+        self.slide_max_charges = self.get_slide_max_charges()
+
+        if self.stats["hp_regen"] > 0:
+            self.hp = min(self.hp + self.stats["hp_regen"] * dt, self.max_hp)
+
+        # Таймеры
+        for attr in ['invincible_timer', 'slide_invincible_after_timer',
+                      'flash_timer', 'speed_boost_timer', 'counter_invincible_timer']:
+            val = getattr(self, attr)
+            if val > 0:
+                setattr(self, attr, val - dt)
+
+        if self.combo_count > 0:
+            self.combo_timer -= dt
+            if self.combo_timer <= 0:
+                self.combo_count = 0
+
+        if self.dash_attack_window_timer > 0:
+            self.dash_attack_window_timer -= dt
+            if self.dash_attack_window_timer <= 0:
+                self.dash_attack_triggered = False
+
+        if self.dash_attack_active:
+            self.dash_attack_timer -= dt
+            if self.dash_attack_timer <= 0:
+                self.dash_attack_active = False
+                self.dash_attack_hit_enemies = []
+
+        if self.counter_attack_active:
+            self.counter_attack_timer -= dt
+            if self.counter_attack_timer <= 0:
+                self.counter_attack_active = False
+                self.counter_attack_hit_enemies = []
+
+        if self.slide_charges < self.slide_max_charges:
+            self.slide_cooldown_timer -= dt
+            if self.slide_cooldown_timer <= 0:
+                self.slide_charges = min(self.slide_charges + 1, self.slide_max_charges)
+                if self.slide_charges < self.slide_max_charges:
+                    self.slide_cooldown_timer = self.get_slide_cooldown()
+
+        # Level-up кольца
+        self.level_up_rings = [(r + LEVEL_UP_RING_SPEED * dt, lt - dt, mlt)
+                               for r, lt, mlt in self.level_up_rings
+                               if lt - dt > 0 and r + LEVEL_UP_RING_SPEED * dt < LEVEL_UP_RING_MAX_RADIUS]
+
+        # Shockwaves
+        self.shockwaves = [(wx, wy, wr + SHOCKWAVE_SPEED * dt, wmr, wd)
+                           for wx, wy, wr, wmr, wd in self.shockwaves
+                           if wr + SHOCKWAVE_SPEED * dt < wmr]
+
+        # Electric trails
+        self.electric_trails = [(tx, ty, tt - dt)
+                                for tx, ty, tt in self.electric_trails
+                                if tt - dt > 0]
+
+        # Fist waves
+        for wave in self.fist_waves:
+            wave.update(dt)
+        self.fist_waves = [w for w in self.fist_waves if w.alive]
+
+        self.rage_intensity = self.get_rage_intensity()
+
+        # Направление
+        world_mouse_x, world_mouse_y = camera.reverse(mouse_pos[0], mouse_pos[1])
+        dx = world_mouse_x - self.x
+        dy = world_mouse_y - self.y
+        dist = math.sqrt(dx * dx + dy * dy)
+        if dist > 0:
+            self.facing_angle = math.atan2(dy, dx)
+
+        # Скольжение
+        slide_pressed = keys[pygame.K_SPACE] or keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]
+
+        if not slide_pressed:
+            if self.is_sliding:
+                self.stop_slide()
+            self.slide_was_pressed = False
+            self.slide_needs_repress = False
+        else:
+            if not self.slide_was_pressed and not self.slide_needs_repress:
+                if not self.is_sliding and self.slide_charges > 0:
+                    self.start_slide()
+                self.slide_was_pressed = True
+
+        if self.is_sliding:
+            self.update_slide(dt, world_mouse_x, world_mouse_y)
+        else:
+            self.update_movement(dt, keys)
+
+        self.current_speed = math.sqrt(self.velocity_x ** 2 + self.velocity_y ** 2)
+        self.x += self.velocity_x * dt
+        self.y += self.velocity_y * dt
+
+        if not self.dash_attack_active:
+            self.update_fist_attack(dt)
+
+    def update_movement(self, dt, keys):
+        mx, my = 0, 0
+        if keys[pygame.K_w] or keys[pygame.K_UP]: my -= 1
+        if keys[pygame.K_s] or keys[pygame.K_DOWN]: my += 1
+        if keys[pygame.K_a] or keys[pygame.K_LEFT]: mx -= 1
+        if keys[pygame.K_d] or keys[pygame.K_RIGHT]: mx += 1
+        if mx != 0 and my != 0:
+            mx *= 0.7071
+            my *= 0.7071
+        speed = self.get_move_speed()
+        self.velocity_x = mx * speed
+        self.velocity_y = my * speed
+
+    # ── Скольжение ──
+    def start_slide(self):
+        self.is_sliding = True
+        self.slide_timer = 0.0
+        self.slide_charges -= 1
+        if self.slide_charges < self.slide_max_charges and self.slide_cooldown_timer <= 0:
+            self.slide_cooldown_timer = self.get_slide_cooldown()
+        self.slide_angle = self.facing_angle
+        self.slide_direction_x = math.cos(self.slide_angle)
+        self.slide_direction_y = math.sin(self.slide_angle)
+        self.slide_current_speed = self.get_slide_initial_speed()
+
+    def stop_slide(self):
+        was_fast = self.is_slide_knockback_active()
+        self.is_sliding = False
+        self.slide_timer = 0.0
+        self.slide_current_speed = 0.0
+        self.slide_needs_repress = True
+        self.dash_attack_window_timer = DASH_ATTACK_WINDOW
+        self.dash_attack_triggered = False
+        if self.stats["slide_invincibility_after"] > 0:
+            self.slide_invincible_after_timer = self.stats["slide_invincibility_after"]
+        if self.stats["slide_shockwave"] > 0 and was_fast:
+            damage = self.get_slide_knockback_damage() * SHOCKWAVE_DAMAGE_MULTIPLIER * self.stats["slide_shockwave"]
+            self.shockwaves.append((self.x, self.y, 0, SHOCKWAVE_RADIUS, damage))
+
+    def update_slide(self, dt, mx, my):
+        self.slide_timer += dt
+        duration = self.get_slide_duration()
+        progress = min(self.slide_timer / duration, 1.0)
+        speed_factor = max(0, 1.0 - progress ** SLIDE_DECELERATION_CURVE)
+        self.slide_current_speed = self.get_slide_initial_speed() * speed_factor
+
+        target_angle = math.atan2(my - self.y, mx - self.x)
+        angle_diff = target_angle - self.slide_angle
+        while angle_diff > math.pi: angle_diff -= 2 * math.pi
+        while angle_diff < -math.pi: angle_diff += 2 * math.pi
+        max_turn = math.radians(self.get_slide_turn_speed()) * dt
+        if abs(angle_diff) > max_turn:
+            angle_diff = max_turn if angle_diff > 0 else -max_turn
+
+        self.slide_angle += angle_diff
+        self.slide_direction_x = math.cos(self.slide_angle)
+        self.slide_direction_y = math.sin(self.slide_angle)
+        self.velocity_x = self.slide_direction_x * self.slide_current_speed
+        self.velocity_y = self.slide_direction_y * self.slide_current_speed
+
+        if self.stats["slide_electric_trail"] > 0 and self.slide_current_speed > 100:
+            self.electric_trails.append((self.x, self.y, ELECTRIC_TRAIL_DURATION))
+
+        if progress >= 1.0:
+            self.stop_slide()
+
+    def is_slide_knockback_active(self):
+        return self.is_sliding and self.slide_current_speed > self.get_move_speed()
+
+    def is_invincible(self):
+        return (self.invincible_timer > 0 or
+                self.is_slide_knockback_active() or
+                self.slide_invincible_after_timer > 0 or
+                self.counter_invincible_timer > 0)
+
+    # ── Dash ──
+    def try_dash_attack(self):
+        if self.dash_attack_window_timer > 0 and not self.dash_attack_triggered:
+            self.dash_attack_active = True
+            self.dash_attack_timer = self.dash_attack_duration
+            self.dash_attack_hit_enemies = []
+            self.dash_attack_triggered = True
+            self.dash_attack_window_timer = 0
+            return True
+        return False
+
+    def get_dash_attack_area(self):
+        if not self.dash_attack_active:
+            return None
+        return {"x": self.x, "y": self.y,
+                "range": self.get_dash_attack_range(),
+                "angle": self.facing_angle, "arc": math.pi,
+                "damage": self.get_dash_attack_damage()}
+
+    # ── Кулаки ──
+    def update_fist_attack(self, dt):
+        attack_speed = self.get_fist_attack_speed()
+        cooldown = 1.0 / attack_speed if attack_speed > 0 else 999
+
+        if self.fist_combo_timer > 0:
+            self.fist_combo_timer -= dt
+            if self.fist_combo_timer <= 0:
+                self.fist_combo_index = 0
+
+        if self.fist_attack_active:
+            self.fist_attack_timer -= dt
+            if self.fist_attack_timer <= 0:
+                self.fist_attack_active = False
+                self.fist_hit_enemies = []
+
+        self.fist_cooldown_timer -= dt
+        if self.fist_cooldown_timer <= 0 and not self.fist_attack_active:
+            max_combo = self.get_fist_combo_max()
+            current_hit = self.fist_combo_index % max_combo
+
+            self.fist_total_hits += 1
+
+            # Мега-удар?
+            self.fist_is_mega = (self.fist_total_hits % FIST_MEGA_HIT_EVERY == 0)
+
+            self.fist_attack_active = True
+            self.fist_attack_timer = self.fist_attack_duration
+            self.fist_cooldown_timer = cooldown
+            self.fist_hit_enemies = []
+
+            if self.fist_is_mega:
+                self.fist_which_hand = 2
+            elif current_hit == max_combo - 1:
+                self.fist_which_hand = 2
+            else:
+                self.fist_which_hand = current_hit % 2
+
+            self.fist_combo_index = (current_hit + 1) % max_combo
+            self.fist_combo_timer = FIST_COMBO_WINDOW
+
+            # Волна от удара
+            if self.stats["fist_wave"] > 0:
+                wave_damage = self.get_fist_damage_for_hit(current_hit) * FIST_WAVE_DAMAGE_RATIO * self.stats["fist_wave"]
+                wave = FistWave(
+                    self.x + math.cos(self.facing_angle) * self.size,
+                    self.y + math.sin(self.facing_angle) * self.size,
+                    self.facing_angle, wave_damage,
+                    FIST_WAVE_SPEED,
+                    FIST_WAVE_RANGE + self.stats["fist_wave"] * 30,
+                    FIST_WAVE_WIDTH + self.stats["fist_wave"] * 10
+                )
+                self.fist_waves.append(wave)
+
+    def get_fist_attack_area(self):
+        if not self.fist_attack_active:
+            return None
+        max_combo = self.get_fist_combo_max()
+        current_hit = (self.fist_combo_index - 1) % max_combo
+
+        arc = 360 if self.fist_is_mega else self.get_fist_arc(current_hit)
+        damage = self.get_fist_damage_for_hit(current_hit)
+        attack_range = self.get_fist_range_for_hit(current_hit)
+        knockback = self.get_fist_knockback_for_hit(current_hit)
+        is_finisher = self.fist_is_mega or (current_hit == max_combo - 1)
+
+        return {
+            "x": self.x, "y": self.y,
+            "range": attack_range, "angle": self.facing_angle,
+            "arc": math.radians(arc / 2), "damage": damage,
+            "knockback": knockback, "combo_index": current_hit,
+            "is_finisher": is_finisher, "is_mega": self.fist_is_mega,
+            "hand": self.fist_which_hand,
+        }
+
+    # ── Контратака ──
+    def trigger_counter_attack(self):
+        if self.stats["fist_counter_attack"] <= 0:
+            return
+        self.counter_attack_active = True
+        self.counter_attack_timer = self.counter_attack_duration
+        self.counter_attack_hit_enemies = []
+        self.counter_invincible_timer = COUNTER_ATTACK_INVINCIBILITY
+
+    def get_counter_attack_area(self):
+        if not self.counter_attack_active:
+            return None
+        return {"x": self.x, "y": self.y,
+                "range": self.get_fist_range() * COUNTER_ATTACK_RANGE_MULTIPLIER,
+                "damage": self.get_fist_damage() * COUNTER_ATTACK_DAMAGE_MULTIPLIER * (self.stats["fist_counter_attack"] / 100)}
+
+    # ── Комбо ──
+    def add_combo(self):
+        self.combo_count += 1
+        self.combo_timer = COMBO_TIMEOUT
+        if self.combo_count > self.combo_max_reached:
+            self.combo_max_reached = self.combo_count
+
+    # ── Урон ──
+    def take_damage(self, damage):
+        if self.is_invincible():
+            return 0
+        if rng_module.random() * 100 < self.stats["block_chance"]:
+            return 0
+        actual_damage = max(1, damage - self.get_armor())
+        self.hp -= actual_damage
+        self.invincible_timer = PLAYER_INVINCIBILITY_AFTER_HIT
+        self.flash_timer = PLAYER_INVINCIBILITY_AFTER_HIT
+        thorns_damage = self.stats["thorns"]
+        self.trigger_counter_attack()
+        if self.hp <= 0:
+            self.hp = 0
+        return thorns_damage
+
+    def heal(self, amount):
+        self.hp = min(self.hp + amount * self.get_heal_effectiveness(), self.max_hp)
+
+    def lifesteal(self, damage_dealt):
+        ls = self.get_fist_lifesteal()
+        if ls > 0:
+            heal_amount = damage_dealt * ls / 100
+            self.hp = min(self.hp + heal_amount, self.max_hp)
+            return heal_amount
+        return 0
+
+    def is_alive(self):
+        return self.hp > 0
+
+    # ── XP ──
+    def gain_xp(self, amount):
+        combo_bonus = 1.0 + self.get_combo_xp_bonus() / 100
+        amount = int(amount * self.get_xp_multiplier() * combo_bonus)
+        self.xp += amount
+        while self.xp >= self.xp_to_next:
+            self.xp -= self.xp_to_next
+            self.level += 1
+            self.pending_levels += 1
+            self.xp_to_next = int(XP_BASE_TO_LEVEL * (XP_GROWTH ** (self.level - 1)))
+            self.level_up_rings.append((0, LEVEL_UP_RING_LIFETIME, LEVEL_UP_RING_LIFETIME))
+
+    def try_reset_slide_cooldown(self):
+        chance = self.stats["slide_kill_reset_chance"]
+        if chance > 0 and rng_module.random() * 100 < chance:
+            self.slide_charges = min(self.slide_charges + 1, self.slide_max_charges)
+            return True
+        return False
+
+    # ================================================================
+    # ОТРИСОВКА
+    # ================================================================
+    def draw(self, screen, camera):
+        sx, sy = camera.apply(self.x, self.y)
+        sx, sy = int(sx), int(sy)
+
+        # Level-up кольца
+        for ring_r, ring_lt, ring_mlt in self.level_up_rings:
+            a = ring_lt / ring_mlt
+            r = int(ring_r)
+            if r > 0:
+                cv = int(255 * a)
+                pygame.draw.circle(screen, (cv, cv, min(255, cv // 2 + 128)), (sx, sy), r, max(1, int(4 * a)))
+
+        # Shockwaves
+        for wx, wy, wr, wmr, wd in self.shockwaves:
+            wsx, wsy = camera.apply(wx, wy)
+            a = 1.0 - wr / wmr
+            ri = int(wr)
+            if ri > 0:
+                cv = int(200 * a)
+                pygame.draw.circle(screen, (cv, cv // 2, cv), (int(wsx), int(wsy)), ri, max(1, int(3 * a)))
+
+        # Electric trails
+        for tx, ty, tt in self.electric_trails:
+            tsx, tsy = camera.apply(tx, ty)
+            a = tt / ELECTRIC_TRAIL_DURATION
+            r = int(ELECTRIC_TRAIL_RADIUS * a)
+            if r > 0:
+                es = pygame.Surface((r * 2, r * 2), pygame.SRCALPHA)
+                pygame.draw.circle(es, (50, 100, int(150 * a), int(40 * a)), (r, r), r)
+                pygame.draw.circle(es, (100, 200, 255, int(80 * a)), (r, r), r, 1)
+                screen.blit(es, (int(tsx) - r, int(tsy) - r))
+
+        # Fist waves
+        for wave in self.fist_waves:
+            wave.draw(screen, camera)
+
+        # Мигание
+        if self.flash_timer > 0 and int(self.flash_timer * 10) % 2 == 0:
+            color = WHITE
+        else:
+            color = self.color
+
+        # Ярость
+        if self.rage_intensity > 0:
+            rage_r = self.size + 12 + int(self.rage_intensity * 10)
+            rs = pygame.Surface((rage_r * 2, rage_r * 2), pygame.SRCALPHA)
+            ra = int(50 * self.rage_intensity * abs(math.sin(self.body_anim_timer * 5)))
+            pygame.draw.circle(rs, (255, 30, 0, ra), (rage_r, rage_r), rage_r)
+            screen.blit(rs, (sx - rage_r, sy - rage_r))
+            rb = self.rage_intensity * 0.6
+            color = (min(255, int(color[0] * (1 - rb) + 255 * rb)),
+                     int(color[1] * (1 - rb) + 30 * rb),
+                     int(color[2] * (1 - rb)))
+
+        # След скольжения
+        if self.is_sliding:
+            tc = (color[0] // 3, color[1] // 3, color[2] // 3)
+            for i in range(4):
+                o = (i + 1) * 7
+                pygame.draw.circle(screen, tc,
+                    (int(sx - self.slide_direction_x * o),
+                     int(sy - self.slide_direction_y * o)),
+                    max(2, self.size - i * 3))
+
+        # Неуязвимость скольжения
+        if self.is_slide_knockback_active():
+            pygame.draw.circle(screen, (100, 200, 255), (sx, sy), self.size + 8, 2)
+
+        # Dash окно
+        if self.dash_attack_window_timer > 0 and not self.dash_attack_triggered:
+            pulse = math.sin(self.body_anim_timer * 15) * 0.5 + 0.5
+            pygame.draw.circle(screen, ORANGE, (sx, sy), self.size + 5 + int(pulse * 5), 2)
+
+        # Dash атака
+        if self.dash_attack_active:
+            dr = int(self.get_dash_attack_range())
+            p = 1.0 - self.dash_attack_timer / self.dash_attack_duration
+            pygame.draw.circle(screen, YELLOW, (sx, sy), dr, 3)
+            for i in range(8):
+                angle = self.facing_angle + (i / 8) * math.pi * 2
+                if (i / 8) <= p:
+                    pygame.draw.circle(screen, ORANGE,
+                        (sx + int(math.cos(angle) * dr), sy + int(math.sin(angle) * dr)), 5)
+
+        # Контратака
+        if self.counter_attack_active:
+            cr = int(self.get_fist_range() * COUNTER_ATTACK_RANGE_MULTIPLIER)
+            pygame.draw.circle(screen, RED, (sx, sy), cr, 3)
+
+        # Тень
+        ss = pygame.Surface((self.size * 2 + 4, 8), pygame.SRCALPHA)
+        pygame.draw.ellipse(ss, (0, 0, 0, 60), (0, 0, self.size * 2 + 4, 8))
+        screen.blit(ss, (sx - self.size - 2, sy + self.size - 2))
+
+        # Тело
+        pygame.draw.circle(screen, color, (sx, sy), self.size)
+        pygame.draw.circle(screen, (min(255, color[0] + 60), min(255, color[1] + 60), min(255, color[2] + 60)),
+                          (sx - self.size // 3, sy - self.size // 3), self.size // 3)
+        pygame.draw.circle(screen, WHITE, (sx, sy), self.size, 2)
+
+        # Руки
+        arm_swing = math.sin(self.body_anim_timer * 8) * 10 if self.current_speed > 10 else 0
+        for i, arm_angle in enumerate([
+            self.facing_angle + math.pi / 2 + math.radians(arm_swing),
+            self.facing_angle - math.pi / 2 - math.radians(arm_swing)
+        ]):
+            ax = sx + int(math.cos(arm_angle) * (self.size + 4) * 0.7)
+            ay = sy + int(math.sin(arm_angle) * (self.size + 4) * 0.7)
+            arm_len = 8
+            aex = ax + int(math.cos(self.facing_angle) * arm_len)
+            aey = ay + int(math.sin(self.facing_angle) * arm_len)
+
+            ac = color
+            if self.fist_attack_active:
+                if self.fist_which_hand == 2 or self.fist_which_hand == i:
+                    ac = ORANGE if self.fist_is_mega else YELLOW
+                    extend = 14 if self.fist_is_mega else 10
+                    aex = ax + int(math.cos(self.facing_angle) * (arm_len + extend))
+                    aey = ay + int(math.sin(self.facing_angle) * (arm_len + extend))
+            pygame.draw.line(screen, ac, (ax, ay), (aex, aey), 4)
+            pygame.draw.circle(screen, ac, (aex, aey), 5 if (self.fist_attack_active and (self.fist_which_hand == 2 or self.fist_which_hand == i)) else 3)
+
+        # Глаза
+        for side in [-1, 1]:
+            perp = self.facing_angle + side * 0.4
+            ex = sx + int(math.cos(perp) * self.size * 0.4)
+            ey = sy + int(math.sin(perp) * self.size * 0.4)
+            pygame.draw.circle(screen, WHITE, (ex, ey), 4)
+            pc = RED if self.rage_intensity > 0.5 else BLACK
+            pygame.draw.circle(screen, pc,
+                (ex + int(math.cos(self.facing_angle) * 2),
+                 ey + int(math.sin(self.facing_angle) * 2)), 2)
+
+        # Удар визуал
+        if self.fist_attack_active and not self.dash_attack_active:
+            attack = self.get_fist_attack_area()
+            if attack:
+                fr = int(attack["range"])
+                if attack.get("is_mega"):
+                    # МЕГА удар — большое кольцо + звёзды
+                    pygame.draw.circle(screen, ORANGE, (sx, sy), fr, 4)
+                    pygame.draw.circle(screen, YELLOW, (sx, sy), fr - 5, 2)
+                    for j in range(8):
+                        a = self.body_anim_timer * 8 + j * math.pi / 4
+                        pygame.draw.circle(screen, WHITE,
+                            (sx + int(math.cos(a) * (fr - 3)),
+                             sy + int(math.sin(a) * (fr - 3))), 4)
+                elif attack["is_finisher"]:
+                    pygame.draw.circle(screen, ORANGE, (sx, sy), fr, 2)
+                    for j in range(6):
+                        a = self.body_anim_timer * 5 + j * math.pi / 3
+                        pygame.draw.circle(screen, YELLOW,
+                            (sx + int(math.cos(a) * (fr - 5)),
+                             sy + int(math.sin(a) * (fr - 5))), 3)
+                else:
+                    fx = sx + int(math.cos(self.facing_angle) * (self.size + 14))
+                    fy = sy + int(math.sin(self.facing_angle) * (self.size + 14))
+                    pygame.draw.circle(screen, YELLOW, (fx, fy), 8)
+                    pygame.draw.circle(screen, ORANGE, (fx, fy), 8, 2)
+                    for j in range(3):
+                        la = self.facing_angle + math.radians(-20 + j * 20)
+                        pygame.draw.line(screen, YELLOW, (fx, fy),
+                            (fx + int(math.cos(la) * 12), fy + int(math.sin(la) * 12)), 2)
+
+        # Серия точки
+        if self.fist_combo_timer > 0:
+            mc = self.get_fist_combo_max()
+            ci = self.fist_combo_index
+            for i in range(mc):
+                dx = sx - (mc - 1) * 5 + i * 10
+                dy2 = sy - self.size - 12
+                pygame.draw.circle(screen, YELLOW if i < ci else DARK_GRAY, (dx, dy2), 3)
+
+        # Мега счётчик
+        mega_progress = self.fist_total_hits % FIST_MEGA_HIT_EVERY
+        if mega_progress > 0:
+            bar_w = 30
+            bar_h = 3
+            bx = sx - bar_w // 2
+            by = sy - self.size - 18
+            ratio = mega_progress / FIST_MEGA_HIT_EVERY
+            pygame.draw.rect(screen, DARK_GRAY, (bx, by, bar_w, bar_h))
+            pygame.draw.rect(screen, ORANGE, (bx, by, int(bar_w * ratio), bar_h))
