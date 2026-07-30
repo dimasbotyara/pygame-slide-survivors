@@ -265,3 +265,101 @@ class ParticleManager:
     def add_message(self, text, color=YELLOW):
         """Добавить сообщение на экран"""
         self.messages.append(GameMessage(text, color))
+
+    # ================================================================
+    # НОВЫЕ ЭФФЕКТЫ
+    # ================================================================
+    def spawn_crit_particles(self, x, y, count=15):
+        """Золотая вспышка при критическом ударе"""
+        for _ in range(count):
+            angle = random.uniform(0, math.pi * 2)
+            speed = random.uniform(150, 400)
+            vx = math.cos(angle) * speed
+            vy = math.sin(angle) * speed
+            lifetime = random.uniform(0.3, 0.6)
+            size = random.randint(4, 8)
+            color = random.choice([GOLD, YELLOW, WHITE, (255, 200, 100)])
+            self.particles.append(Particle(x, y, vx, vy, color, lifetime, size))
+
+    def spawn_mega_hit_particles(self, x, y, count=35):
+        """Эпический взрыв при мега-ударе"""
+        for _ in range(count):
+            angle = random.uniform(0, math.pi * 2)
+            speed = random.uniform(200, 600)
+            vx = math.cos(angle) * speed
+            vy = math.sin(angle) * speed
+            lifetime = random.uniform(0.5, 1.0)
+            size = random.randint(5, 10)
+            color = random.choice([RED, ORANGE, YELLOW, WHITE, GOLD])
+            self.particles.append(Particle(x, y, vx, vy, color, lifetime, size))
+
+    def spawn_combo_milestone_particles(self, x, y, combo_count):
+        """Праздничное кольцо частиц при комбо 50/100/200"""
+        ring_count = min(60, 20 + combo_count // 5)
+        for i in range(ring_count):
+            angle = (i / ring_count) * math.pi * 2
+            speed = random.uniform(200, 450)
+            vx = math.cos(angle) * speed
+            vy = math.sin(angle) * speed
+            lifetime = random.uniform(0.8, 1.5)
+            size = random.randint(5, 9)
+            color = random.choice([GOLD, YELLOW, CYAN, WHITE, ORANGE])
+            self.particles.append(Particle(x, y, vx, vy, color, lifetime, size))
+
+    def spawn_orbital_blade_hit(self, x, y, count=6):
+        """Искры при попадании орбитального клинка"""
+        for _ in range(count):
+            angle = random.uniform(0, math.pi * 2)
+            speed = random.uniform(60, 180)
+            vx = math.cos(angle) * speed
+            vy = math.sin(angle) * speed
+            lifetime = random.uniform(0.15, 0.35)
+            size = random.randint(2, 4)
+            color = random.choice([CYAN, WHITE, (100, 220, 255)])
+            self.particles.append(Particle(x, y, vx, vy, color, lifetime, size))
+
+    def spawn_poison_particles(self, x, y, count=5):
+        """Ядовитые пузырьки (поднимаются вверх)"""
+        for _ in range(count):
+            vx = random.uniform(-30, 30)
+            vy = random.uniform(-120, -40)
+            lifetime = random.uniform(0.5, 1.0)
+            size = random.randint(3, 6)
+            color = random.choice([GREEN, (50, 200, 50), (80, 255, 80), LIME])
+            self.particles.append(Particle(x, y, vx, vy, color, lifetime, size))
+
+    def spawn_shield_break_particles(self, x, y, count=12):
+        """Осколки щита при поглощении урона"""
+        for _ in range(count):
+            angle = random.uniform(0, math.pi * 2)
+            speed = random.uniform(100, 300)
+            vx = math.cos(angle) * speed
+            vy = math.sin(angle) * speed
+            lifetime = random.uniform(0.3, 0.7)
+            size = random.randint(3, 6)
+            color = random.choice([CYAN, (100, 180, 255), WHITE, (50, 150, 255)])
+            self.particles.append(Particle(x, y, vx, vy, color, lifetime, size))
+
+    def spawn_executioner_particles(self, x, y, count=18):
+        """Кровавый взрыв при казни"""
+        for _ in range(count):
+            angle = random.uniform(0, math.pi * 2)
+            speed = random.uniform(150, 400)
+            vx = math.cos(angle) * speed
+            vy = math.sin(angle) * speed
+            lifetime = random.uniform(0.4, 0.8)
+            size = random.randint(4, 8)
+            color = random.choice([CRIMSON, RED, (180, 20, 20), (220, 50, 50)])
+            self.particles.append(Particle(x, y, vx, vy, color, lifetime, size))
+
+    def spawn_electric_particles(self, x, y, count=8):
+        """Электрические искры"""
+        for _ in range(count):
+            angle = random.uniform(0, math.pi * 2)
+            speed = random.uniform(100, 350)
+            vx = math.cos(angle) * speed
+            vy = math.sin(angle) * speed
+            lifetime = random.uniform(0.1, 0.3)
+            size = random.randint(2, 5)
+            color = random.choice([YELLOW, WHITE, CYAN, (255, 255, 180)])
+            self.particles.append(Particle(x, y, vx, vy, color, lifetime, size))

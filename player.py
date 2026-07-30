@@ -110,6 +110,11 @@ class Player:
             "aura_damage": 0.0, "aura_slow": 0, "block_chance": 0, "thorns": 0,
             "projectile_count": 0, "projectile_spread": 0,
             "effect_duration": 0, "pierce": 0,
+            # Новые механики (апгрейды)
+            "shield_max": 0, "executioner_chance": 0, "poison_thorns": 0,
+            "time_warp": 0, "giant_growth": 0, "adrenaline": 0,
+            "double_impact_chance": 0, "orbital_blade_count": 0,
+            "heal_on_kills": 0,
         }
 
         # Ультимейт, щит и статистика
@@ -118,7 +123,12 @@ class Player:
         self.shield_hp = 0.0
         self.shield_regen_timer = 0.0
         self.adrenaline_timer = 0.0
+        self.adrenaline_active = False
         self.orbital_blades_angle = 0.0
+        self.orbital_blade_hit_enemies = {}  # enemy_id -> cooldown
+        self.giant_growth_active = False
+        self.base_size = PLAYER_BASE_SIZE
+        self.time_warp_active = False
 
         # Скольжение
         self.is_sliding = False
@@ -212,6 +222,9 @@ class Player:
         base = PLAYER_BASE_SPEED * (1 + self.stats["move_speed"] / 100)
         if self.speed_boost_timer > 0:
             base *= self.speed_boost_multiplier
+        # Адреналин — бонус скорости после получения урона
+        if self.adrenaline_timer > 0 and self.stats.get("adrenaline", 0) > 0:
+            base *= 1.0 + 0.15 * self.stats["adrenaline"]
         return base
 
     def get_xp_radius(self):
@@ -409,6 +422,46 @@ class Player:
         for wave in self.fist_waves:
             wave.update(dt)
         self.fist_waves = [w for w in self.fist_waves if w.alive]
+
+        # ── Новые механики апгрейдов ──
+
+        # Орбитальные клинки — вращение
+        blade_count = self.stats.get("orbital_blade_count", 0)
+        if blade_count > 0:
+            self.orbital_blades_angle += 3.0 * dt  # оборот ~2 секунды
+            # Уменьшаем кулдауны попаданий
+            for eid in list(self.orbital_blade_hit_enemies.keys()):
+                self.orbital_blade_hit_enemies[eid] -= dt
+                if self.orbital_blade_hit_enemies[eid] <= 0:
+                    del self.orbital_blade_hit_enemies[eid]
+
+        # Щит — регенерация
+        shield_max = self.stats.get("shield_max", 0)
+        if shield_max > 0:
+            if self.shield_hp < shield_max:
+                self.shield_regen_timer += dt
+                if self.shield_regen_timer >= 3.0:  # через 3 секунды после урона
+                    regen_rate = shield_max * 0.15  # 15% в секунду
+                    self.shield_hp = min(shield_max, self.shield_hp + regen_rate * dt)
+
+        # Адреналин — таймер затухания
+        if self.adrenaline_timer > 0:
+            self.adrenaline_timer -= dt
+            self.adrenaline_active = True
+        else:
+            self.adrenaline_active = False
+
+        # Гигантский рост — масштабирование размера
+        giant_lvl = self.stats.get("giant_growth", 0)
+        if giant_lvl > 0:
+            self.size = self.base_size + giant_lvl * 5  # +5 за уровень
+            self.giant_growth_active = True
+        else:
+            self.size = self.base_size
+            self.giant_growth_active = False
+
+        # Time Warp флаг (обработка замедления — в main.py)
+        self.time_warp_active = self.stats.get("time_warp", 0) > 0
 
         self.rage_intensity = self.get_rage_intensity()
 
@@ -650,12 +703,17 @@ class Player:
         if self.stats.get("adrenaline", 0) > 0:
             self.adrenaline_timer = 3.0
 
+        # Сброс таймера регена щита
+        self.shield_regen_timer = 0.0
+
         # Энерго-щит гасит урон первей HP
-        shield_max = self.stats.get("shield_max", 0)
+        self.shield_absorbed = False
         if self.shield_hp > 0:
+            self.shield_absorbed = True
             if damage <= self.shield_hp:
                 self.shield_hp -= damage
-                return self.stats["thorns"]
+                # Ядовитые шипы + обычные шипы
+                return self.stats["thorns"] + self.stats.get("poison_thorns", 0) * 8
             else:
                 damage -= self.shield_hp
                 self.shield_hp = 0
@@ -664,7 +722,8 @@ class Player:
         self.hp -= actual_damage
         self.invincible_timer = PLAYER_INVINCIBILITY_AFTER_HIT
         self.flash_timer = PLAYER_INVINCIBILITY_AFTER_HIT
-        thorns_damage = self.stats["thorns"]
+        # Ядовитые шипы наносят 8 урона за уровень + обычные шипы
+        thorns_damage = self.stats["thorns"] + self.stats.get("poison_thorns", 0) * 8
         self.trigger_counter_attack()
         if self.hp <= 0:
             self.hp = 0
@@ -889,6 +948,58 @@ class Player:
             ratio = mega_progress / FIST_MEGA_HIT_EVERY
             pygame.draw.rect(screen, DARK_GRAY, (bx, by, bar_w, bar_h))
             pygame.draw.rect(screen, ORANGE, (bx, by, int(bar_w * ratio), bar_h))
+
+        # ── Орбитальные клинки ──
+        blade_count = int(self.stats.get("orbital_blade_count", 0))
+        if blade_count > 0:
+            orbit_r = self.size + 28
+            for i in range(blade_count):
+                blade_angle = self.orbital_blades_angle + (i * math.pi * 2 / blade_count)
+                bx2 = sx + int(math.cos(blade_angle) * orbit_r)
+                by2 = sy + int(math.sin(blade_angle) * orbit_r)
+                # Клинок — ромб
+                blade_pts = [
+                    (bx2 + int(math.cos(blade_angle) * 10), by2 + int(math.sin(blade_angle) * 10)),
+                    (bx2 + int(math.cos(blade_angle + 1.5) * 5), by2 + int(math.sin(blade_angle + 1.5) * 5)),
+                    (bx2 + int(math.cos(blade_angle + math.pi) * 4), by2 + int(math.sin(blade_angle + math.pi) * 4)),
+                    (bx2 + int(math.cos(blade_angle - 1.5) * 5), by2 + int(math.sin(blade_angle - 1.5) * 5)),
+                ]
+                pygame.draw.polygon(screen, CYAN, blade_pts)
+                pygame.draw.polygon(screen, WHITE, blade_pts, 1)
+
+        # ── Щит (полоска под HP) ──
+        shield_max = self.stats.get("shield_max", 0)
+        if shield_max > 0 and self.shield_hp > 0:
+            shield_r = self.size + 4
+            shield_ratio = self.shield_hp / shield_max
+            shield_arc = shield_ratio * math.pi * 2
+            # Рисуем дугу щита
+            for angle_step in range(int(shield_arc * 20)):
+                a = -math.pi / 2 + angle_step / 20.0
+                px2 = sx + int(math.cos(a) * shield_r)
+                py2 = sy + int(math.sin(a) * shield_r)
+                pygame.draw.circle(screen, (50, 150, 255), (px2, py2), 2)
+
+        # ── Адреналин свечение ──
+        if self.adrenaline_active:
+            adr_r = self.size + 10
+            adr_pulse = abs(math.sin(self.body_anim_timer * 8))
+            adr_s = pygame.Surface((adr_r * 2, adr_r * 2), pygame.SRCALPHA)
+            pygame.draw.circle(adr_s, (255, 150, 0, int(40 * adr_pulse)), (adr_r, adr_r), adr_r)
+            screen.blit(adr_s, (sx - adr_r, sy - adr_r))
+
+        # ── Гигантский рост обводка ──
+        if self.giant_growth_active:
+            pygame.draw.circle(screen, BROWN, (sx, sy), self.size + 2, 3)
+
+        # ── Time Warp аура ──
+        if self.time_warp_active:
+            tw_r = 120 + self.stats.get("time_warp", 0) * 30
+            tw_s = pygame.Surface((tw_r * 2, tw_r * 2), pygame.SRCALPHA)
+            tw_alpha = int(20 + 10 * abs(math.sin(self.body_anim_timer * 2)))
+            pygame.draw.circle(tw_s, (30, 60, 150, tw_alpha), (tw_r, tw_r), tw_r)
+            pygame.draw.circle(tw_s, (50, 100, 200, tw_alpha + 10), (tw_r, tw_r), tw_r, 1)
+            screen.blit(tw_s, (sx - tw_r, sy - tw_r))
 
     def gain_ult_charge(self, amount):
         self.ult_charge = min(100.0, self.ult_charge + amount)

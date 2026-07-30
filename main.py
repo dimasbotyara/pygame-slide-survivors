@@ -441,8 +441,10 @@ class Game:
         # Ограничить игрока ареной босса
         self.enforce_boss_arena()
 
-        # Обновить камеру
-        self.camera.update(self.player.x, self.player.y, dt)
+        # Обновить камеру (с look-ahead по направлению движения)
+        self.camera.update(self.player.x, self.player.y, dt,
+                          target_vx=self.player.velocity_x,
+                          target_vy=self.player.velocity_y)
 
         # Следы скольжения на земле
         if self.player.is_sliding and self.player.slide_current_speed > 50:
@@ -1690,6 +1692,9 @@ class Game:
                 self.enemies, self.xp_orbs,
                 self.dropped_items, bosses_alive
             )
+
+        # Вспышка экрана (поверх всего)
+        self.camera.draw_flash(self.screen)
 
     def draw_stun_effect(self, enemy):
         """Крутящиеся звёздочки над оглушённым врагом"""
