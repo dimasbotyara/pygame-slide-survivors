@@ -1,10 +1,12 @@
-# ui.py — User Interface with localization & settings support
+# ui.py — User Interface with localization, hero selection, boss bar & achievements
 
 import pygame
 import math
 from settings import *
 from highscores import load_highscores, format_time, calculate_score
 from translations import t
+from heroes import HEROES, HERO_KEYS
+from achievements import ACHIEVEMENTS_LIST
 
 
 class UI:
@@ -20,15 +22,18 @@ class UI:
     # ================================================================
     # HUD
     # ================================================================
-    def draw_hud(self, screen, player, game_time, enemy_count, settings_manager=None):
+    def draw_hud(self, screen, player, game_time, enemy_count, active_boss=None):
         self.draw_hp_bar(screen, player)
         self.draw_xp_bar(screen, player)
         self.draw_level(screen, player)
         self.draw_timer(screen, game_time)
         self.draw_slide_indicator(screen, player)
+        self.draw_ult_bar(screen, player)
         self.draw_stats_mini(screen, player, enemy_count)
         self.draw_combo(screen, player)
         self.draw_dash_hint(screen, player)
+        if active_boss:
+            self.draw_boss_bar(screen, active_boss)
 
     def draw_hp_bar(self, screen, player):
         x = UI_MARGIN
@@ -118,6 +123,68 @@ class UI:
             slide_text = t("SLIDING")
             text_surface = self.font_small.render(slide_text, True, CYAN)
             screen.blit(text_surface, (x, y + 25))
+
+    def draw_ult_bar(self, screen, player):
+        bar_w = 160
+        bar_h = 16
+        bar_x = UI_MARGIN
+        bar_y = UI_MARGIN + UI_HP_BAR_HEIGHT + 65
+
+        ratio = player.ult_charge / 100.0
+        bg_rect = pygame.Rect(bar_x, bar_y, bar_w, bar_h)
+        pygame.draw.rect(screen, DARK_GRAY, bg_rect)
+
+        fill_w = int(bar_w * ratio)
+        fill_rect = pygame.Rect(bar_x, bar_y, fill_w, bar_h)
+        fill_color = GOLD if player.can_use_ult() else YELLOW
+        pygame.draw.rect(screen, fill_color, fill_rect)
+        pygame.draw.rect(screen, WHITE if player.can_use_ult() else GRAY, bg_rect, 2)
+
+        from heroes import HEROES
+        hero_id = getattr(player, 'hero_id', 'slider')
+        hero_info = HEROES.get(hero_id, HEROES["slider"])
+        ult_id = hero_info["ult_id"]
+        ult_name = t(f"{ult_id}_name")
+
+        if player.can_use_ult():
+            t_str = t("ULT_READY", ult_name)
+            text_s = self.font_small.render(t_str, True, GOLD)
+            screen.blit(text_s, (bar_x, bar_y + 20))
+        else:
+            pct_str = f"{ult_name}: {int(player.ult_charge)}%"
+            text_s = self.font_small.render(pct_str, True, LIGHT_GRAY)
+            text_r = text_s.get_rect(center=bg_rect.center)
+            screen.blit(text_s, text_r)
+
+    def draw_boss_bar(self, screen, boss):
+        if not boss or not boss.alive:
+            return
+
+        bar_w = 500
+        bar_h = 22
+        bar_x = (SCREEN_WIDTH - bar_w) // 2
+        bar_y = 35
+
+        is_enraged = getattr(boss, 'is_enraged', False)
+        title_text = t("BOSS_HP_TITLE")
+        title_s = self.font.render(title_text, True, RED if is_enraged else GOLD)
+        title_r = title_s.get_rect(center=(SCREEN_WIDTH // 2, 18))
+        screen.blit(title_s, title_r)
+
+        bg_rect = pygame.Rect(bar_x, bar_y, bar_w, bar_h)
+        pygame.draw.rect(screen, (30, 0, 0), bg_rect)
+
+        hp_ratio = max(0.0, min(1.0, boss.hp / boss.max_hp))
+        fill_w = int(bar_w * hp_ratio)
+        fill_rect = pygame.Rect(bar_x, bar_y, fill_w, bar_h)
+        fill_color = CRIMSON if is_enraged else PURPLE
+        pygame.draw.rect(screen, fill_color, fill_rect)
+        pygame.draw.rect(screen, RED if is_enraged else GOLD, bg_rect, 2)
+
+        hp_text = f"{int(boss.hp)} / {int(boss.max_hp)}"
+        hp_s = self.font_small.render(hp_text, True, WHITE)
+        hp_r = hp_s.get_rect(center=bg_rect.center)
+        screen.blit(hp_s, hp_r)
 
     def draw_combo(self, screen, player):
         if player.combo_count <= 0:
@@ -303,13 +370,16 @@ class UI:
         desc_surface = self.font_small.render(upgrade.description, True, LIGHT_GRAY)
         screen.blit(desc_surface, (x + 15, y + 75))
 
-        if "slide" in upgrade.upgrade_id:
+        if upgrade.category == "hero":
+            cat_text = t("CAT_HERO")
+            cat_color = GOLD
+        elif "slide" in upgrade.upgrade_id:
             cat_text = t("CAT_SLIDE")
             cat_color = CYAN
         elif upgrade.category == "fist" or upgrade.upgrade_id in ["damage", "attack_speed", "attack_range", "crit_chance", "crit_multiplier", "target_count"]:
             cat_text = t("CAT_COMBAT")
             cat_color = RED
-        elif upgrade.upgrade_id in ["aura_damage", "aura_slow", "thorns", "block_chance"]:
+        elif upgrade.upgrade_id in ["aura_damage", "aura_slow", "thorns", "block_chance", "shield_wall", "orbital_blade"]:
             cat_text = t("CAT_SPECIAL")
             cat_color = PURPLE
         else:
@@ -318,6 +388,68 @@ class UI:
 
         cat_surface = self.font_small.render(cat_text, True, cat_color)
         screen.blit(cat_surface, (x + 15, y + 95))
+
+    # ================================================================
+    # ВЫБОР ПЕРСОНАЖА
+    # ================================================================
+    def draw_hero_select_screen(self, screen, selected_index):
+        screen.fill((15, 15, 30))
+
+        title = self.font_large.render(t("HERO_SELECT_TITLE"), True, CYAN)
+        title_rect = title.get_rect(center=(SCREEN_WIDTH // 2, 70))
+        screen.blit(title, title_rect)
+
+        box_w = 260
+        box_h = 360
+        total_w = len(HERO_KEYS) * box_w + (len(HERO_KEYS) - 1) * 25
+        start_x = (SCREEN_WIDTH - total_w) // 2
+
+        for i, key in enumerate(HERO_KEYS):
+            h_data = HEROES[key]
+            is_selected = (i == selected_index)
+
+            bx = start_x + i * (box_w + 25)
+            by = SCREEN_HEIGHT // 2 - box_h // 2 + 10
+            rect = pygame.Rect(bx, by, box_w, box_h)
+
+            bg_c = (50, 50, 80) if is_selected else (30, 30, 50)
+            pygame.draw.rect(screen, bg_c, rect)
+
+            if is_selected:
+                glow = rect.inflate(8, 8)
+                pygame.draw.rect(screen, YELLOW, glow, 3)
+
+            border_c = YELLOW if is_selected else GRAY
+            pygame.draw.rect(screen, border_c, rect, 2)
+
+            # Круг персонажа
+            cx = bx + box_w // 2
+            cy = by + 60
+            pygame.draw.circle(screen, h_data["color"], (cx, cy), 35)
+            pygame.draw.circle(screen, h_data["outline_color"], (cx, cy), 35, 3)
+
+            # Название и подзаголовок
+            name_s = self.font.render(t(f"hero_{key}_name"), True, WHITE)
+            name_r = name_s.get_rect(center=(cx, by + 120))
+            screen.blit(name_s, name_r)
+
+            sub_s = self.font_small.render(t(f"hero_{key}_sub"), True, GOLD)
+            sub_r = sub_s.get_rect(center=(cx, by + 145))
+            screen.blit(sub_s, sub_r)
+
+            # Описание и характеристики
+            desc_text = t(f"hero_{key}_desc")
+            parts = desc_text.split(" | ")
+            y_offset = by + 180
+            for part in parts:
+                p_s = self.font_small.render(part, True, LIGHT_GRAY)
+                p_r = p_s.get_rect(center=(cx, y_offset))
+                screen.blit(p_s, p_r)
+                y_offset += 25
+
+        hint = self.font_small.render(t("HERO_SELECT_HINT"), True, GRAY)
+        hint_rect = hint.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 40))
+        screen.blit(hint, hint_rect)
 
     # ================================================================
     # ВЫБОР ЯЗЫКА (ПЕРВЫЙ ЗАПУСК)
@@ -400,6 +532,42 @@ class UI:
         screen.blit(hint, hint_rect)
 
     # ================================================================
+    # ДОСТИЖЕНИЯ
+    # ================================================================
+    def draw_achievements_screen(self, screen, achievement_manager):
+        screen.fill((15, 15, 30))
+
+        title = self.font_large.render(t("ACH_TITLE"), True, GOLD)
+        title_rect = title.get_rect(center=(SCREEN_WIDTH // 2, 50))
+        screen.blit(title, title_rect)
+
+        start_y = 110
+        for i, ach_id in enumerate(ACHIEVEMENTS_LIST):
+            y = start_y + i * 65
+            unlocked = achievement_manager.is_unlocked(ach_id)
+
+            rect = pygame.Rect(180, y, SCREEN_WIDTH - 360, 55)
+            bg_c = (40, 50, 40) if unlocked else (30, 30, 40)
+            pygame.draw.rect(screen, bg_c, rect)
+            pygame.draw.rect(screen, GOLD if unlocked else GRAY, rect, 1)
+
+            icon_str = "🏆" if unlocked else "🔒"
+            icon_s = self.font.render(icon_str, True, GOLD if unlocked else GRAY)
+            screen.blit(icon_s, (rect.x + 15, rect.y + 12))
+
+            title_str = t(f"ach_{ach_id}_title")
+            t_s = self.font.render(title_str, True, GOLD if unlocked else WHITE)
+            screen.blit(t_s, (rect.x + 55, rect.y + 8))
+
+            desc_str = t(f"ach_{ach_id}_desc")
+            d_s = self.font_small.render(desc_str, True, LIGHT_GRAY if unlocked else GRAY)
+            screen.blit(d_s, (rect.x + 55, rect.y + 32))
+
+        back = self.font.render(t("ESC_RETURN_HINT"), True, GRAY)
+        back_rect = back.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 30))
+        screen.blit(back, back_rect)
+
+    # ================================================================
     # ГЛАВНОЕ МЕНЮ
     # ================================================================
     def draw_main_menu(self, screen, selected_option):
@@ -415,18 +583,20 @@ class UI:
             screen.blit(s, (px, py))
 
         title = self.font_title.render(t("TITLE"), True, CYAN)
-        title_rect = title.get_rect(center=(SCREEN_WIDTH // 2, 130))
+        title_rect = title.get_rect(center=(SCREEN_WIDTH // 2, 110))
 
         shadow = self.font_title.render(t("TITLE"), True, DARK_BLUE)
         screen.blit(shadow, (title_rect.x + 3, title_rect.y + 3))
         screen.blit(title, title_rect)
 
         subtitle = self.font.render(t("SUBTITLE"), True, LIGHT_GRAY)
-        sub_rect = subtitle.get_rect(center=(SCREEN_WIDTH // 2, 195))
+        sub_rect = subtitle.get_rect(center=(SCREEN_WIDTH // 2, 170))
         screen.blit(subtitle, sub_rect)
 
         menu_items = [
             t("MENU_PLAY"),
+            t("MENU_HEROES"),
+            t("MENU_ACHIEVEMENTS"),
             t("MENU_SETTINGS"),
             t("MENU_CONTROLS"),
             t("MENU_HIGHSCORES"),
@@ -434,7 +604,7 @@ class UI:
         ]
 
         for i, item in enumerate(menu_items):
-            y = 280 + i * 55
+            y = 240 + i * 50
             is_selected = (i == selected_option)
 
             color = YELLOW if is_selected else WHITE
@@ -457,7 +627,7 @@ class UI:
             screen.blit(text, text_rect)
 
         hint = self.font_small.render(t("MENU_HINT"), True, GRAY)
-        hint_rect = hint.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 35))
+        hint_rect = hint.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 25))
         screen.blit(hint, hint_rect)
 
     # ================================================================
@@ -523,13 +693,14 @@ class UI:
         screen.fill((15, 15, 30))
 
         title = self.font_large.render(t("CONTROLS_TITLE"), True, CYAN)
-        title_rect = title.get_rect(center=(SCREEN_WIDTH // 2, 50))
+        title_rect = title.get_rect(center=(SCREEN_WIDTH // 2, 40))
         screen.blit(title, title_rect)
 
         controls = [
             (t("CTRL_MOVE_KEY"), t("CTRL_MOVE_DESC")),
             (t("CTRL_SLIDE_KEY"), t("CTRL_SLIDE_DESC")),
             (t("CTRL_DASH_KEY"), t("CTRL_DASH_DESC")),
+            (t("CTRL_ULT_KEY"), t("CTRL_ULT_DESC")),
             (t("CTRL_LOOK_KEY"), t("CTRL_LOOK_DESC")),
             (t("CTRL_SELECT_KEY"), t("CTRL_SELECT_DESC")),
             (t("CTRL_PAUSE_KEY"), t("CTRL_PAUSE_DESC")),
@@ -548,7 +719,7 @@ class UI:
             ("", t("CTRL_COMBO_INFO_1")),
         ]
 
-        y = 100
+        y = 85
         for key, desc in controls:
             if key:
                 key_s = self.font.render(key, True, YELLOW)
@@ -557,10 +728,10 @@ class UI:
                 desc_s = self.font.render(desc, True, WHITE)
                 x_pos = 420 if key else 80
                 screen.blit(desc_s, (x_pos, y))
-            y += 28
+            y += 26
 
         back = self.font.render(t("ESC_RETURN_HINT"), True, GRAY)
-        back_rect = back.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 35))
+        back_rect = back.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 30))
         screen.blit(back, back_rect)
 
     # ================================================================

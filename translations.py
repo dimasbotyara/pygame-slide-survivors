@@ -12,11 +12,71 @@ TRANSLATIONS = {
         "TITLE": "SLIDE SURVIVORS",
         "SUBTITLE": "Скользи. Бей. Выживай.",
         "MENU_PLAY": "Играть",
+        "MENU_HEROES": "Персонажи",
+        "MENU_ACHIEVEMENTS": "Достижения",
         "MENU_SETTINGS": "Настройки",
         "MENU_CONTROLS": "Управление",
         "MENU_HIGHSCORES": "Рекорды",
         "MENU_EXIT": "Выход",
         "MENU_HINT": "↑↓ для навигации, Enter для выбора",
+
+        # Hero Selection
+        "HERO_SELECT_TITLE": "ВЫБОР ПЕРСОНАЖА",
+        "HERO_SELECT_HINT": "← → / A D для выбора, Enter для выбора героя и старта",
+        "hero_slider_name": "Слайдер",
+        "hero_slider_sub": "Скоростной трюкач",
+        "hero_slider_desc": "Заряды скольжения: 3 | Исходная скорость: +20% | КД скольжения: -15%",
+
+        "hero_brawler_name": "Боец",
+        "hero_brawler_sub": "Мастер кулачного боя",
+        "hero_brawler_desc": "Урон кулаков: +30% | Дуга атаки: +30° | Макс. HP: 125",
+
+        "hero_spark_name": "Молния",
+        "hero_spark_sub": "Повелитель тока",
+        "hero_spark_desc": "Электрослед: СТАРТ (1 ур.) | Скорость бега: +15%",
+
+        "hero_shadow_name": "Тень",
+        "hero_shadow_sub": "Призрак клинок",
+        "hero_shadow_desc": "Крит. шанс: 20% | Крит. урон: 200% | Вампиризм: 4%",
+
+        # Hero Ultimates
+        "ult_chrono_slide_name": "Хроно-Рывок",
+        "ult_chrono_slide_desc": "Сброс зарядов + гипер-скорость + шок-волны на 4с",
+
+        "ult_earthquake_slam_name": "Дрожь Земли",
+        "ult_earthquake_slam_desc": "Сейсмо-удар на 350 урона + стягивание и стан 3.5с",
+
+        "ult_chain_lightning_name": "Цепной Шторм",
+        "ult_chain_lightning_desc": "12 молний по цепи + штормовые электрозоны",
+
+        "ult_shadow_dance_name": "Танец Теней",
+        "ult_shadow_dance_desc": "Телепорты по 10 врагам с 4x критом + лечение",
+
+        # Achievements Screen
+        "ACH_TITLE": "ДОСТИЖЕНИЯ",
+        "ACH_UNLOCKED": "ДОСТИЖЕНИЕ ПОЛУЧЕНО",
+        "ach_first_kill_title": "Первая кровь",
+        "ach_first_kill_desc": "Убейте 1 врага",
+        "ach_slide_master_title": "Мастер скольжения",
+        "ach_slide_master_desc": "Совершите 50 скольжений",
+        "ach_combo_50_title": "Мастер комбо",
+        "ach_combo_50_desc": "Достигните комбо x50",
+        "ach_boss_slayer_title": "Убийца боссов",
+        "ach_boss_slayer_desc": "Победите первого босса",
+        "ach_level_20_title": "Ветеран",
+        "ach_level_20_desc": "Достигните 20 уровня",
+        "ach_ult_used_title": "Супер-удар",
+        "ach_ult_used_desc": "Активируйте ультимейт (Q / ПКМ)",
+        "ach_kills_500_title": "Орда повержена",
+        "ach_kills_500_desc": "Убейте 500 врагов",
+        "ach_survive_5min_title": "Выживший",
+        "ach_survive_5min_desc": "Продержитесь 5 минут в одном бою",
+
+        # Ultimate & Boss
+        "ULT_READY": "Q / ПКМ — {}!",
+        "ULT_ACTIVATED": "УЛЬТИМЕЙТ: {}!",
+        "BOSS_HP_TITLE": "⚠ БОСС-ЛОРД ⚠",
+        "BOSS_PHASE_2": "⚡ БОСС ВПАЛ В ЯРОСТЬ! ⚡",
 
         # Settings
         "SETTINGS_TITLE": "НАСТРОЙКИ",
@@ -48,8 +108,52 @@ TRANSLATIONS = {
         "CAT_COMBAT": "⚔ Боевое",
         "CAT_SPECIAL": "✦ Особое",
         "CAT_BASIC": "♥ Базовое",
+        "CAT_HERO": "⭐ Уникальное",
 
-        # Upgrade Items
+        # Hero Exclusive Upgrades
+        "upgrade_slider_hyper_slide_name": "Гипер-скольжение",
+        "upgrade_slider_hyper_slide_desc": "+30% скорость рывка и x2 урон откида",
+        "upgrade_slider_infinite_momentum_name": "Бесконечный Импульс",
+        "upgrade_slider_infinite_momentum_desc": "+5% урон за каждое скольжение",
+
+        "upgrade_brawler_titan_fists_name": "Кулаки Титана",
+        "upgrade_brawler_titan_fists_desc": "+50% урон кулаков и отброс боссов",
+        "upgrade_brawler_blood_rage_name": "Кровавая Ярость",
+        "upgrade_brawler_blood_rage_desc": "До +100% скор. атаки при низком HP",
+
+        "upgrade_spark_overcharge_name": "Перегрузка",
+        "upgrade_spark_overcharge_desc": "Электрослед притягивает врагов",
+        "upgrade_spark_thunder_strike_name": "Удар Грома",
+        "upgrade_spark_thunder_strike_desc": "Каждый 5-й удар выбивает молнию",
+
+        "upgrade_shadow_blade_mastery_name": "Мастерство Клинка",
+        "upgrade_shadow_blade_mastery_desc": "+15% крит и кровотечение",
+        "upgrade_shadow_soul_drain_name": "Жатва Душ",
+        "upgrade_shadow_soul_drain_desc": "+5% вампиризм и заряд Ульта от крита",
+
+        # New General Upgrades
+        "upgrade_shield_wall_name": "Энерго-Щит",
+        "upgrade_shield_wall_desc": "+30 HP щита (восстанавливается 10с)",
+        "upgrade_executioner_name": "Палач",
+        "upgrade_executioner_desc": "Мгновенно казнит врагов с HP < 15%",
+        "upgrade_poison_thorns_name": "Ядовитые Шипы",
+        "upgrade_poison_thorns_desc": "Атакующие вас враги отравляются",
+        "upgrade_time_warp_name": "Замедление Времени",
+        "upgrade_time_warp_desc": "-25% скорость врагов рядом",
+        "upgrade_giant_growth_name": "Великан",
+        "upgrade_giant_growth_desc": "+40 макс HP и +20% размер кулаков",
+        "upgrade_adrenaline_name": "Адреналин",
+        "upgrade_adrenaline_desc": "+30% скорость на 3с при уроне",
+        "upgrade_double_impact_name": "Двойной Удар",
+        "upgrade_double_impact_desc": "15% шанс повторить удар кулаком",
+        "upgrade_orbital_blade_name": "Орбитальный Клинок",
+        "upgrade_orbital_blade_desc": "+1 крутящийся клинок вокруг игрока",
+        "upgrade_xp_magnet_aura_name": "Магнитное Поле",
+        "upgrade_xp_magnet_aura_desc": "+50% радиус сбора опыта",
+        "upgrade_gold_fever_name": "Жизненный Поток",
+        "upgrade_gold_fever_desc": "Лечение +15 HP за каждые 50 убийств",
+
+        # Original Upgrade Items
         "upgrade_max_hp_name": "Здоровье",
         "upgrade_max_hp_desc": "+20 макс HP",
         "upgrade_hp_regen_name": "Регенерация",
@@ -140,6 +244,8 @@ TRANSLATIONS = {
         "CTRL_SLIDE_DESC": "Скольжение (удерживать)",
         "CTRL_DASH_KEY": "ЛКМ (после скольжения)",
         "CTRL_DASH_DESC": "Dash-атака (усиленный удар)",
+        "CTRL_ULT_KEY": "Q / ПКМ",
+        "CTRL_ULT_DESC": "Активация Ультимейта",
         "CTRL_LOOK_KEY": "Мышь",
         "CTRL_LOOK_DESC": "Направление взгляда",
         "CTRL_SELECT_KEY": "1 2 3 / Enter",
@@ -212,11 +318,71 @@ TRANSLATIONS = {
         "TITLE": "SLIDE SURVIVORS",
         "SUBTITLE": "Slide. Strike. Survive.",
         "MENU_PLAY": "Play",
+        "MENU_HEROES": "Heroes",
+        "MENU_ACHIEVEMENTS": "Achievements",
         "MENU_SETTINGS": "Settings",
         "MENU_CONTROLS": "Controls",
         "MENU_HIGHSCORES": "High Scores",
         "MENU_EXIT": "Quit",
         "MENU_HINT": "↑↓ to navigate, Enter to select",
+
+        # Hero Selection
+        "HERO_SELECT_TITLE": "SELECT HERO",
+        "HERO_SELECT_HINT": "← → / A D to choose, Enter to select & start",
+        "hero_slider_name": "Slider",
+        "hero_slider_sub": "Speed Stuntman",
+        "hero_slider_desc": "Slide Charges: 3 | Initial Speed: +20% | Slide Cooldown: -15%",
+
+        "hero_brawler_name": "Brawler",
+        "hero_brawler_sub": "Fist Master",
+        "hero_brawler_desc": "Fist Damage: +30% | Attack Arc: +30° | Max HP: 125",
+
+        "hero_spark_name": "Spark",
+        "hero_spark_sub": "Shock Weaver",
+        "hero_spark_desc": "Electric Trail: START (Lvl 1) | Move Speed: +15%",
+
+        "hero_shadow_name": "Shadow",
+        "hero_shadow_sub": "Phantom Strike",
+        "hero_shadow_desc": "Crit Chance: 20% | Crit Damage: 200% | Lifesteal: 4%",
+
+        # Hero Ultimates
+        "ult_chrono_slide_name": "Chrono Slide",
+        "ult_chrono_slide_desc": "Reset charges + super speed + shockwaves for 4s",
+
+        "ult_earthquake_slam_name": "Earthquake Slam",
+        "ult_earthquake_slam_desc": "Seismic slam 350 dmg + pull & 3.5s stun",
+
+        "ult_chain_lightning_name": "Chain Lightning",
+        "ult_chain_lightning_desc": "12 chain lightnings + electric storm zones",
+
+        "ult_shadow_dance_name": "Shadow Dance",
+        "ult_shadow_dance_desc": "Teleport across 10 enemies with 4x crit + heal",
+
+        # Achievements Screen
+        "ACH_TITLE": "ACHIEVEMENTS",
+        "ACH_UNLOCKED": "ACHIEVEMENT UNLOCKED",
+        "ach_first_kill_title": "First Blood",
+        "ach_first_kill_desc": "Defeat 1 enemy",
+        "ach_slide_master_title": "Slide Master",
+        "ach_slide_master_desc": "Perform 50 slides",
+        "ach_combo_50_title": "Combo King",
+        "ach_combo_50_desc": "Reach combo x50",
+        "ach_boss_slayer_title": "Boss Slayer",
+        "ach_boss_slayer_desc": "Defeat the first boss",
+        "ach_level_20_title": "Veteran",
+        "ach_level_20_desc": "Reach level 20",
+        "ach_ult_used_title": "Supernova",
+        "ach_ult_used_desc": "Activate ultimate ability (Q / RMB)",
+        "ach_kills_500_title": "Horde Cleared",
+        "ach_kills_500_desc": "Defeat 500 enemies",
+        "ach_survive_5min_title": "Survivor",
+        "ach_survive_5min_desc": "Survive for 5 minutes in a single run",
+
+        # Ultimate & Boss
+        "ULT_READY": "Q / RMB — {}!",
+        "ULT_ACTIVATED": "ULTIMATE: {}!",
+        "BOSS_HP_TITLE": "⚠ BOSS LORD ⚠",
+        "BOSS_PHASE_2": "⚡ BOSS ENTERED RAGE MODE! ⚡",
 
         # Settings
         "SETTINGS_TITLE": "SETTINGS",
@@ -248,8 +414,52 @@ TRANSLATIONS = {
         "CAT_COMBAT": "⚔ Combat",
         "CAT_SPECIAL": "✦ Special",
         "CAT_BASIC": "♥ Basic",
+        "CAT_HERO": "⭐ Exclusive",
 
-        # Upgrade Items
+        # Hero Exclusive Upgrades
+        "upgrade_slider_hyper_slide_name": "Hyper Slide",
+        "upgrade_slider_hyper_slide_desc": "+30% slide speed and x2 knockback dmg",
+        "upgrade_slider_infinite_momentum_name": "Infinite Momentum",
+        "upgrade_slider_infinite_momentum_desc": "+5% damage after each slide",
+
+        "upgrade_brawler_titan_fists_name": "Titan Fists",
+        "upgrade_brawler_titan_fists_desc": "+50% fist damage & boss knockback",
+        "upgrade_brawler_blood_rage_name": "Blood Rage",
+        "upgrade_brawler_blood_rage_desc": "Up to +100% attack speed at low HP",
+
+        "upgrade_spark_overcharge_name": "Overcharge",
+        "upgrade_spark_overcharge_desc": "Electric trail pulls enemies in",
+        "upgrade_spark_thunder_strike_name": "Thunder Strike",
+        "upgrade_spark_thunder_strike_desc": "Every 5th punch triggers thunderbolt",
+
+        "upgrade_shadow_blade_mastery_name": "Blade Mastery",
+        "upgrade_shadow_blade_mastery_desc": "+15% crit & bleed effect",
+        "upgrade_shadow_soul_drain_name": "Soul Drain",
+        "upgrade_shadow_soul_drain_desc": "+5% lifesteal & ult charge on crit",
+
+        # New General Upgrades
+        "upgrade_shield_wall_name": "Energy Shield",
+        "upgrade_shield_wall_desc": "+30 Shield HP (regen 10s)",
+        "upgrade_executioner_name": "Executioner",
+        "upgrade_executioner_desc": "Instantly executes enemies with HP < 15%",
+        "upgrade_poison_thorns_name": "Poison Thorns",
+        "upgrade_poison_thorns_desc": "Attacking enemies get poisoned",
+        "upgrade_time_warp_name": "Time Warp",
+        "upgrade_time_warp_desc": "-25% enemy speed nearby",
+        "upgrade_giant_growth_name": "Giant Stature",
+        "upgrade_giant_growth_desc": "+40 Max HP & +20% punch size",
+        "upgrade_adrenaline_name": "Adrenaline",
+        "upgrade_adrenaline_desc": "+30% speed for 3s when hit",
+        "upgrade_double_impact_name": "Double Impact",
+        "upgrade_double_impact_desc": "15% chance to repeat fist punch",
+        "upgrade_orbital_blade_name": "Orbital Blade",
+        "upgrade_orbital_blade_desc": "+1 spinning blade around player",
+        "upgrade_xp_magnet_aura_name": "Magnetic Field",
+        "upgrade_xp_magnet_aura_desc": "+50% XP pickup range",
+        "upgrade_gold_fever_name": "Life Tide",
+        "upgrade_gold_fever_desc": "Heals +15 HP every 50 kills",
+
+        # Original Upgrade Items
         "upgrade_max_hp_name": "Health",
         "upgrade_max_hp_desc": "+20 Max HP",
         "upgrade_hp_regen_name": "Regeneration",
@@ -340,6 +550,8 @@ TRANSLATIONS = {
         "CTRL_SLIDE_DESC": "Slide (hold)",
         "CTRL_DASH_KEY": "LMB (after slide)",
         "CTRL_DASH_DESC": "Dash Attack (empowered strike)",
+        "CTRL_ULT_KEY": "Q / RMB",
+        "CTRL_ULT_DESC": "Activate Ultimate Ability",
         "CTRL_LOOK_KEY": "Mouse",
         "CTRL_LOOK_DESC": "Look direction",
         "CTRL_SELECT_KEY": "1 2 3 / Enter",

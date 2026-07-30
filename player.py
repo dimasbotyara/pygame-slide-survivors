@@ -4,6 +4,8 @@ import pygame
 import math
 import random as rng_module
 from settings import *
+from heroes import get_hero_data
+
 
 
 class FistWave:
@@ -71,33 +73,52 @@ class FistWave:
 
 
 class Player:
-    def __init__(self, x, y):
+    def __init__(self, x, y, hero_id="slider"):
         self.x = float(x)
         self.y = float(y)
 
-        self.max_hp = PLAYER_BASE_HP
+        hero_data = get_hero_data(hero_id)
+        self.hero_id = hero_id
+        self.hero_data = hero_data
+
+        self.max_hp = hero_data["base_hp"]
         self.hp = self.max_hp
-        self.base_speed = PLAYER_BASE_SPEED
+        self.base_speed = hero_data["base_speed"]
         self.size = PLAYER_BASE_SIZE
+
+        self.player_color = hero_data["color"]
+        self.outline_color = hero_data["outline_color"]
 
         self.stats = {
             "max_hp": 0, "hp_regen": 0.0, "move_speed": 0, "armor": 0,
             "xp_radius": 0, "luck": 0,
             "damage": 0, "attack_speed": 0, "attack_range": 0,
-            "crit_chance": 5, "crit_multiplier": 50, "target_count": 0,
-            "fist_combo_hits": 0, "fist_lifesteal": 0, "fist_stun_chance": 0,
+            "crit_chance": hero_data["crit_chance"],
+            "crit_multiplier": hero_data["crit_mult"],
+            "target_count": 0,
+            "fist_combo_hits": 0, "fist_lifesteal": hero_data["lifesteal"], "fist_stun_chance": 0,
             "fist_rage": 0, "fist_ground_slam": 0, "fist_counter_attack": 0,
             "fist_arc_bonus": 0, "fist_wave": 0, "fist_xp_pull": 0,
             "slide_speed": 0, "slide_duration": 0, "slide_cooldown": 0,
-            "slide_damage": 0, "slide_knockback_radius": 0, "slide_charges": 0,
+            "slide_damage": 0, "slide_knockback_radius": 0,
+            "slide_charges": max(0, hero_data["slide_charges"] - 1),
             "slide_kill_reset_chance": 0, "slide_turn_speed": 0,
             "slide_invincibility_after": 0.0,
-            "slide_electric_trail": 0, "slide_shockwave": 0,
+            "slide_electric_trail": 1 if "slide_electric" in hero_data["bonus_upgrades"] else 0,
+            "slide_shockwave": 0,
             "xp_multiplier": 0, "drop_chance": 0, "heal_effectiveness": 0,
             "aura_damage": 0.0, "aura_slow": 0, "block_chance": 0, "thorns": 0,
             "projectile_count": 0, "projectile_spread": 0,
             "effect_duration": 0, "pierce": 0,
         }
+
+        # Ультимейт, щит и статистика
+        self.ult_charge = 0.0  # 0.0 - 100.0
+        self.total_slides_count = 0
+        self.shield_hp = 0.0
+        self.shield_regen_timer = 0.0
+        self.adrenaline_timer = 0.0
+        self.orbital_blades_angle = 0.0
 
         # Скольжение
         self.is_sliding = False
@@ -172,7 +193,7 @@ class Player:
         self.speed_boost_multiplier = 1.0
 
         self.level_up_rings = []
-        self.color = PLAYER_COLOR
+        self.color = self.player_color
         self.flash_timer = 0.0
         self.body_anim_timer = 0.0
         self.rage_intensity = 0.0
@@ -441,6 +462,7 @@ class Player:
     # ── Скольжение ──
     def start_slide(self):
         self.is_sliding = True
+        self.total_slides_count += 1
         self.slide_timer = 0.0
         self.slide_charges -= 1
         if self.slide_charges < self.slide_max_charges and self.slide_cooldown_timer <= 0:
@@ -623,6 +645,21 @@ class Player:
             return 0
         if rng_module.random() * 100 < self.stats["block_chance"]:
             return 0
+
+        # Адреналин при получении урона
+        if self.stats.get("adrenaline", 0) > 0:
+            self.adrenaline_timer = 3.0
+
+        # Энерго-щит гасит урон первей HP
+        shield_max = self.stats.get("shield_max", 0)
+        if self.shield_hp > 0:
+            if damage <= self.shield_hp:
+                self.shield_hp -= damage
+                return self.stats["thorns"]
+            else:
+                damage -= self.shield_hp
+                self.shield_hp = 0
+
         actual_damage = max(1, damage - self.get_armor())
         self.hp -= actual_damage
         self.invincible_timer = PLAYER_INVINCIBILITY_AFTER_HIT
@@ -852,3 +889,73 @@ class Player:
             ratio = mega_progress / FIST_MEGA_HIT_EVERY
             pygame.draw.rect(screen, DARK_GRAY, (bx, by, bar_w, bar_h))
             pygame.draw.rect(screen, ORANGE, (bx, by, int(bar_w * ratio), bar_h))
+
+    def gain_ult_charge(self, amount):
+        self.ult_charge = min(100.0, self.ult_charge + amount)
+
+    def can_use_ult(self):
+        return self.ult_charge >= 100.0
+
+    def trigger_hero_ult(self, hero_id, enemies, camera, particle_manager):
+        """Запуск уникальной ультимативной способности героя"""
+        if not self.can_use_ult():
+            return False
+
+        self.ult_charge = 0.0
+        from heroes import HEROES
+        from translations import t
+
+        hero_info = HEROES.get(hero_id, HEROES["slider"])
+        ult_id = hero_info["ult_id"]
+        ult_name = t(f"{ult_id}_name")
+
+        particle_manager.add_message(t("ULT_ACTIVATED", ult_name), GOLD)
+
+        if hero_id == "slider":
+            # Хроно-Рывок
+            self.slide_charges = self.slide_max_charges
+            self.invincible_timer = 4.0
+            self.speed_boost_timer = 4.0
+            self.speed_boost_multiplier = 2.0
+            camera.add_shake(12)
+            particle_manager.spawn_bomb_particles(self.x, self.y, count=50)
+
+        elif hero_id == "brawler":
+            # Дрожь Земли
+            camera.add_shake(20)
+            particle_manager.spawn_bomb_particles(self.x, self.y, count=80)
+            for enemy in enemies:
+                if enemy.alive and camera.is_visible(enemy.x, enemy.y, margin=150):
+                    enemy.take_damage(350)
+                    enemy.stun_timer = 3.5
+                    dx = self.x - enemy.x
+                    dy = self.y - enemy.y
+                    dist = max(1.0, math.sqrt(dx * dx + dy * dy))
+                    enemy.apply_knockback((dx / dist) * 400, (dy / dist) * 400)
+
+        elif hero_id == "spark":
+            # Цепной Шторм
+            camera.add_shake(12)
+            particle_manager.spawn_level_up_particles(self.x, self.y, count=60)
+            for i in range(12):
+                angle = i * (math.pi * 2 / 12)
+                for r in [60, 120, 180]:
+                    tx = self.x + math.cos(angle) * r
+                    ty = self.y + math.sin(angle) * r
+                    self.electric_trails.append((tx, ty, ELECTRIC_TRAIL_RADIUS * 1.5, 3.0))
+
+        elif hero_id == "shadow":
+            # Танец Теней
+            camera.add_shake(15)
+            self.invincible_timer = 3.0
+            self.heal(self.max_hp * 0.25)
+            count = 0
+            for enemy in enemies:
+                if enemy.alive and camera.is_visible(enemy.x, enemy.y, margin=200):
+                    enemy.take_damage(self.get_fist_damage() * 4.0)
+                    particle_manager.spawn_death_particles(enemy.x, enemy.y, PURPLE, count=15)
+                    count += 1
+                    if count >= 10:
+                        break
+
+        return True

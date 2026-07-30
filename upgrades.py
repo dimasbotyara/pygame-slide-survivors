@@ -1,4 +1,4 @@
-# upgrades.py — Upgrades system with translation support
+# upgrades.py — Comprehensive upgrades system with hero exclusive upgrades
 
 import random
 from settings import *
@@ -7,7 +7,7 @@ from translations import t
 
 class Upgrade:
     def __init__(self, upgrade_id, icon_color, stat_key, value,
-                 max_level=None, category="basic"):
+                 max_level=None, category="basic", hero_id=None):
         self.upgrade_id = upgrade_id
         self.icon_color = icon_color
         self.stat_key = stat_key
@@ -15,6 +15,7 @@ class Upgrade:
         self.max_level = max_level
         self.current_level = 0
         self.category = category
+        self.hero_id = hero_id
 
     @property
     def name(self):
@@ -31,11 +32,39 @@ class Upgrade:
 
     def apply(self, player):
         self.current_level += 1
-        player.stats[self.stat_key] += self.value
+        if self.stat_key in player.stats:
+            player.stats[self.stat_key] += self.value
+        else:
+            player.stats[self.stat_key] = self.value
 
 
 def create_all_upgrades():
     upgrades = []
+
+    # ──── ⭐ УНИКАЛЬНЫЕ ДЛЯ ГЕРОЕВ ────
+    upgrades.append(Upgrade("slider_hyper_slide", CYAN, "slide_speed", 30, max_level=3, category="hero", hero_id="slider"))
+    upgrades.append(Upgrade("slider_infinite_momentum", WHITE, "damage", 5, category="hero", hero_id="slider"))
+
+    upgrades.append(Upgrade("brawler_titan_fists", RED, "damage", 50, max_level=3, category="hero", hero_id="brawler"))
+    upgrades.append(Upgrade("brawler_blood_rage", ORANGE, "attack_speed", 25, max_level=4, category="hero", hero_id="brawler"))
+
+    upgrades.append(Upgrade("spark_overcharge", GOLD, "slide_electric_trail", 2, max_level=3, category="hero", hero_id="spark"))
+    upgrades.append(Upgrade("spark_thunder_strike", YELLOW, "fist_wave", 2, max_level=3, category="hero", hero_id="spark"))
+
+    upgrades.append(Upgrade("shadow_blade_mastery", PURPLE, "crit_chance", 15, max_level=3, category="hero", hero_id="shadow"))
+    upgrades.append(Upgrade("shadow_soul_drain", DARK_PURPLE, "fist_lifesteal", 5, max_level=4, category="hero", hero_id="shadow"))
+
+    # ──── 🛡️ НОВЫЕ ОБЩИЕ УЛУЧШЕНИЯ ────
+    upgrades.append(Upgrade("shield_wall", CYAN, "shield_max", 30, max_level=5, category="utility"))
+    upgrades.append(Upgrade("executioner", CRIMSON, "executioner_chance", 15, max_level=3, category="basic"))
+    upgrades.append(Upgrade("poison_thorns", GREEN, "poison_thorns", 1, max_level=5, category="utility"))
+    upgrades.append(Upgrade("time_warp", DARK_BLUE, "time_warp", 1, max_level=3, category="utility"))
+    upgrades.append(Upgrade("giant_growth", BROWN, "giant_growth", 1, max_level=3, category="basic"))
+    upgrades.append(Upgrade("adrenaline", ORANGE, "adrenaline", 1, max_level=3, category="utility"))
+    upgrades.append(Upgrade("double_impact", YELLOW, "double_impact_chance", 15, max_level=4, category="basic"))
+    upgrades.append(Upgrade("orbital_blade", GOLD, "orbital_blade_count", 1, max_level=4, category="utility"))
+    upgrades.append(Upgrade("xp_magnet_aura", YELLOW, "xp_radius", 50, max_level=3, category="utility"))
+    upgrades.append(Upgrade("gold_fever", GREEN, "heal_on_kills", 15, max_level=3, category="utility"))
 
     # ──── БАЗОВЫЕ ────
     upgrades.append(Upgrade("max_hp", RED, "max_hp", 20, category="basic"))
@@ -95,8 +124,11 @@ class UpgradeManager:
         self.choosing = False
         self.selected_index = 0
 
-    def generate_choices(self, num_choices=CHOICES_PER_LEVEL, luck_bonus=0):
-        available = [u for u in self.all_upgrades if u.can_upgrade()]
+    def generate_choices(self, num_choices=CHOICES_PER_LEVEL, luck_bonus=0, hero_id="slider"):
+        available = [
+            u for u in self.all_upgrades
+            if u.can_upgrade() and (u.hero_id is None or u.hero_id == hero_id)
+        ]
         if not available:
             available = [u for u in self.all_upgrades if u.max_level is None]
 
@@ -125,10 +157,11 @@ class UpgradeManager:
         self.selected_index = 0
 
     def _get_weight(self, upgrade, luck_bonus):
-        weights = {"basic": 100, "fist": 65 + luck_bonus, "slide": 65 + luck_bonus, "utility": 55 + luck_bonus}
+        weights = {"hero": 120 + luck_bonus * 2, "basic": 100, "fist": 65 + luck_bonus, "slide": 65 + luck_bonus, "utility": 55 + luck_bonus}
         w = weights.get(upgrade.category, 70)
         rare = ["fist_combo_hits", "fist_ground_slam", "fist_counter", "fist_wave", "fist_xp_pull",
-                "slide_charges", "slide_electric", "slide_shockwave", "slide_kill_reset"]
+                "slide_charges", "slide_electric", "slide_shockwave", "slide_kill_reset",
+                "shield_wall", "orbital_blade", "executioner"]
         if upgrade.upgrade_id in rare:
             w = 40 + luck_bonus * 2
         return max(1, w)

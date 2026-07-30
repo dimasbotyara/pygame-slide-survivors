@@ -473,7 +473,8 @@ class Boss(Enemy):
         self.is_boss = True
         self.no_despawn = True  # Босс не деспавнится!
 
-        self.anim_timer = 0.0
+        self.phase_2_triggered = False
+        self.is_enraged = False
 
         # Арена
         self.arena_center_x = x
@@ -484,6 +485,18 @@ class Boss(Enemy):
         """Установить центр арены на позицию игрока при спавне босса"""
         self.arena_center_x = px
         self.arena_center_y = py
+
+    def update(self, dt, player_x, player_y, game_messages=None):
+        self.anim_timer += dt
+        super().update(dt, player_x, player_y)
+
+        if self.hp / self.max_hp < 0.5 and not self.phase_2_triggered:
+            self.phase_2_triggered = True
+            self.is_enraged = True
+            self.speed = BOSS_SPEED * 1.3
+            self.color = CRIMSON
+            if game_messages is not None:
+                game_messages.append(t("BOSS_PHASE_2"))
 
     def draw(self, screen, camera):
         if not self.alive:

@@ -17,6 +17,9 @@ from ui import UI
 from highscores import add_highscore
 from settings_manager import SettingsManager
 from translations import t
+from heroes import HEROES, HERO_KEYS
+from achievements import AchievementManager
+
 
 
 class Game:
@@ -27,8 +30,9 @@ class Game:
         self.clock = pygame.time.Clock()
         self.running = True
 
-        # Менеджер настроек
+        # Менеджер настроек и достижений
         self.settings_manager = SettingsManager()
+        self.achievement_manager = AchievementManager()
 
         # UI
         self.ui = UI()
@@ -39,6 +43,7 @@ class Game:
         else:
             self.state = "menu"
 
+        self.selected_hero_index = 0
         self.lang_selection = 0
         self.menu_selection = 0
         self.settings_selection = 0
@@ -95,6 +100,12 @@ class Game:
             if self.state == "language_select":
                 self.update_language_select(events)
                 self.draw_language_select()
+            elif self.state == "hero_select":
+                self.update_hero_select(events)
+                self.draw_hero_select()
+            elif self.state == "achievements":
+                self.update_achievements(events)
+                self.draw_achievements()
             elif self.state == "menu":
                 self.update_menu(events)
                 self.draw_menu()
@@ -130,7 +141,8 @@ class Game:
     # ================================================================
     def start_new_game(self):
         """Начать новую игру — сбросить все объекты"""
-        self.player = Player(0, 0)
+        hero_id = HERO_KEYS[self.selected_hero_index]
+        self.player = Player(0, 0, hero_id=hero_id)
         self.camera = Camera(SCREEN_WIDTH, SCREEN_HEIGHT)
         self.camera.shake_enabled = self.settings_manager.get("screen_shake", True)
         self.world = World()
@@ -173,27 +185,61 @@ class Game:
         self.ui.draw_language_select_screen(self.screen, self.lang_selection)
 
     # ================================================================
+    # ВЫБОР ПЕРСОНАЖА
+    # ================================================================
+    def update_hero_select(self, events):
+        for event in events:
+            if event.type == pygame.KEYDOWN:
+                if event.key in (pygame.K_LEFT, pygame.K_a):
+                    self.selected_hero_index = (self.selected_hero_index - 1) % len(HERO_KEYS)
+                elif event.key in (pygame.K_RIGHT, pygame.K_d):
+                    self.selected_hero_index = (self.selected_hero_index + 1) % len(HERO_KEYS)
+                elif event.key == pygame.K_RETURN:
+                    self.start_new_game()
+                elif event.key == pygame.K_ESCAPE:
+                    self.state = "menu"
+
+    def draw_hero_select(self):
+        self.ui.draw_hero_select_screen(self.screen, self.selected_hero_index)
+
+    # ================================================================
+    # ДОСТИЖЕНИЯ
+    # ================================================================
+    def update_achievements(self, events):
+        for event in events:
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    self.state = "menu"
+
+    def draw_achievements(self):
+        self.ui.draw_achievements_screen(self.screen, self.achievement_manager)
+
+    # ================================================================
     # ГЛАВНОЕ МЕНЮ
     # ================================================================
     def update_menu(self, events):
         for event in events:
             if event.type == pygame.KEYDOWN:
                 if event.key in (pygame.K_UP, pygame.K_w):
-                    self.menu_selection = (self.menu_selection - 1) % 5
+                    self.menu_selection = (self.menu_selection - 1) % 7
                 elif event.key in (pygame.K_DOWN, pygame.K_s):
-                    self.menu_selection = (self.menu_selection + 1) % 5
+                    self.menu_selection = (self.menu_selection + 1) % 7
                 elif event.key == pygame.K_RETURN:
                     if self.menu_selection == 0:
                         self.start_new_game()
                     elif self.menu_selection == 1:
+                        self.state = "hero_select"
+                    elif self.menu_selection == 2:
+                        self.state = "achievements"
+                    elif self.menu_selection == 3:
                         self.settings_previous_state = "menu"
                         self.settings_selection = 0
                         self.state = "settings"
-                    elif self.menu_selection == 2:
-                        self.state = "controls"
-                    elif self.menu_selection == 3:
-                        self.state = "highscores"
                     elif self.menu_selection == 4:
+                        self.state = "controls"
+                    elif self.menu_selection == 5:
+                        self.state = "highscores"
+                    elif self.menu_selection == 6:
                         self.running = False
 
     def draw_menu(self):
@@ -345,7 +391,8 @@ class Game:
         if self.player.pending_levels > 0:
             self.player.pending_levels -= 1
             luck = self.player.stats["luck"]
-            self.upgrade_manager.generate_choices(CHOICES_PER_LEVEL, luck)
+            hero_id = getattr(self.player, 'hero_id', 'slider')
+            self.upgrade_manager.generate_choices(CHOICES_PER_LEVEL, luck, hero_id=hero_id)
         else:
             self.state = "playing"
 
@@ -364,19 +411,23 @@ class Game:
     def update_playing(self, dt, events):
         """Обновление всей игровой логики"""
 
-        # Проверка паузы и dash-атаки из событий
+        # Проверка паузы, ультимейта и dash-атаки из событий
         for event in events:
             if event.type == pygame.KEYDOWN:
                 if event.key in (pygame.K_ESCAPE, pygame.K_p):
                     self.state = "paused"
                     self.pause_selection = 0
                     return
-            # Dash-атака по ЛКМ
+                elif event.key == pygame.K_q:
+                    self.trigger_hero_ult()
+            # Dash-атака по ЛКМ, ульт по ПКМ
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 1:
                     if self.player.try_dash_attack():
                         self.camera.add_shake(SHAKE_BOSS_HIT)
                         self.particle_manager.add_message(t("MSG_DASH"), ORANGE)
+                elif event.button == 3:
+                    self.trigger_hero_ult()
 
         self.game_time += dt
 
@@ -479,12 +530,27 @@ class Game:
         if self.player.pending_levels > 0:
             self.player.pending_levels -= 1
             luck = self.player.stats["luck"]
-            self.upgrade_manager.generate_choices(CHOICES_PER_LEVEL, luck)
+            hero_id = getattr(self.player, 'hero_id', 'slider')
+            self.upgrade_manager.generate_choices(CHOICES_PER_LEVEL, luck, hero_id=hero_id)
             self.state = "upgrading"
             self.particle_manager.spawn_level_up_particles(
                 self.player.x, self.player.y
             )
             self.particle_manager.add_message(t("MSG_LEVEL_UP", self.player.level), YELLOW)
+
+        # Проверить достижения
+        if self.player.enemies_killed >= 1:
+            self.achievement_manager.unlock("first_kill", self.particle_manager)
+        if self.player.enemies_killed >= 500:
+            self.achievement_manager.unlock("kills_500", self.particle_manager)
+        if self.player.total_slides_count >= 50:
+            self.achievement_manager.unlock("slide_master", self.particle_manager)
+        if self.player.combo_count >= 50:
+            self.achievement_manager.unlock("combo_50", self.particle_manager)
+        if self.player.level >= 20:
+            self.achievement_manager.unlock("level_20", self.particle_manager)
+        if self.game_time >= 300:
+            self.achievement_manager.unlock("survive_5min", self.particle_manager)
 
         # Проверить смерть игрока
         if not self.player.is_alive():
@@ -493,6 +559,11 @@ class Game:
             )
             self.state = "game_over"
             self.game_over_selection = 0
+
+    def trigger_hero_ult(self):
+        """Активация ультимативной способности текущего героя"""
+        if self.player.trigger_hero_ult(self.player.hero_id, self.enemies, self.camera, self.particle_manager):
+            self.achievement_manager.unlock("ult_used", self.particle_manager)
 
     # ================================================================
     # БОСС-АРЕНА
@@ -1270,6 +1341,7 @@ class Game:
         """Обработка убийства врага"""
         self.player.enemies_killed += 1
         self.player.add_combo()
+        self.player.gain_ult_charge(3.0)
 
         # Частицы смерти
         death_particles = 15
@@ -1277,6 +1349,7 @@ class Game:
             death_particles = 40
             self.camera.add_shake(SHAKE_BOSS_DEATH)
             self.particle_manager.add_message(t("MSG_BOSS_DEFEATED"), GOLD)
+            self.achievement_manager.unlock("boss_slayer", self.particle_manager)
         else:
             # Маленький shake при большом комбо
             if self.player.combo_count > 10 and self.player.combo_count % 10 == 0:
@@ -1602,9 +1675,11 @@ class Game:
         )
 
         # HUD
+        active_boss = self.active_bosses[0] if self.active_bosses else None
         self.ui.draw_hud(
             self.screen, self.player,
-            self.game_time, len(self.enemies)
+            self.game_time, len(self.enemies),
+            active_boss=active_boss
         )
 
         # Мини-карта
