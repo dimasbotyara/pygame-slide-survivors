@@ -8,6 +8,7 @@ from translations import t
 from heroes import HEROES, HERO_KEYS
 from achievements import ACHIEVEMENTS_LIST
 from typography import TextFont
+from consumables import tonic_icon
 
 INK = (12, 18, 29)
 PANEL = (23, 34, 50)
@@ -47,12 +48,29 @@ def result_rect(i):
     return pygame.Rect(410, 440 + i*65, 460, 54)
 
 
-def menu_inputs(events, rects):
-    """Yield (focused index, key); a left click activates just like Enter."""
+def hero_arrow_rect(step):
+    return pygame.Rect(703 if step < 0 else 1116, 303, 52, 52)
+
+
+NUMBER_KEYS = {getattr(pygame, f'K_{prefix}{n}'): n - 1
+               for prefix in ('', 'KP') for n in range(1, 10)}
+
+
+def menu_inputs(events, rects, extra_buttons=()):
+    """Yield (focused index, key); clicks and digits activate the same item as Enter."""
     for event in events:
         if event.type == pygame.KEYDOWN:
-            yield None, event.key
+            index = NUMBER_KEYS.get(event.key)
+            if index is None:
+                yield None, event.key
+            elif index < len(rects):
+                yield index, pygame.K_RETURN
         elif event.type == pygame.MOUSEMOTION or (event.type == pygame.MOUSEBUTTONDOWN and event.button == 1):
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                for rect, key in extra_buttons:
+                    if rect.collidepoint(event.pos):
+                        yield None, key
+                        break
             for i, rect in enumerate(rects):
                 if rect.collidepoint(event.pos):
                     yield i, pygame.K_RETURN if event.type == pygame.MOUSEBUTTONDOWN else None
@@ -105,6 +123,13 @@ class UI:
         self.draw_xp_bar(screen, player)
         self.draw_level(screen, player)
         self.draw_timer(screen, game_time)
+        for i, (kind, seconds) in enumerate(player.tonic_timers.items()):
+            rect = pygame.Rect(UI_MARGIN + i * 66, SCREEN_HEIGHT - UI_XP_BAR_HEIGHT - 34, 62, 28)
+            pygame.draw.rect(screen, INK, rect, border_radius=6)
+            icon = tonic_icon(kind)
+            screen.blit(icon, icon.get_rect(center=(rect.x+14, rect.centery)))
+            clock = self.mono.render(str(math.ceil(seconds)), True, PAPER)
+            screen.blit(clock, clock.get_rect(midright=(rect.right-6, rect.centery)))
         self.draw_slide_indicator(screen, player)
         self.draw_ult_bar(screen, player)
         self.draw_stats_mini(screen, player, enemy_count)
@@ -488,6 +513,8 @@ class UI:
             pygame.draw.rect(screen, MINT if i == selected_index else EDGE, rect,
                              3 if i == selected_index else 1, border_radius=10)
 
+            screen.blit(self.mono.render(f"0{i+1}", True, MUTED), (bx+15, by+10))
+
             # Круг персонажа
             cx = bx + box_w // 2
             cy = by + 60
@@ -610,9 +637,15 @@ class UI:
         key = HERO_KEYS[selected_hero_index]
         hero = HEROES[key]
         accent = hero['color']
-        # Track markings behind the two panels.
-        for x in range(-300, SCREEN_WIDTH, 68):
+        # Scrolling lanes and little packets of light behind the stationary UI.
+        seconds = pygame.time.get_ticks() / 1000
+        drift = int(seconds * 18) % 68
+        for lane in range(-7, SCREEN_WIDTH // 68 + 1):
+            x = lane * 68 + drift
             pygame.draw.line(screen, (19, 29, 43), (x, SCREEN_HEIGHT), (x+350, 0), 1)
+            progress = (seconds * 0.24 + lane * 0.618) % 1
+            head = (int(x + progress * 350), int((1-progress) * SCREEN_HEIGHT))
+            pygame.draw.line(screen, (32, 67, 76), head, (head[0]-13, head[1]+27), 2)
         screen.blit(self.mono.render('SS  /  ' + t('LOBBY'), True, MINT), (70, 40))
         pygame.draw.line(screen, EDGE, (70, 76), (1210, 76))
         screen.blit(self.font_title.render(t('TITLE'), True, PAPER), (66, 85))
@@ -629,6 +662,14 @@ class UI:
         screen.blit(self.mono.render(t('ACTIVE_FIGHTER'), True, MUTED), (x, 225))
         serial = self.mono.render(f'{selected_hero_index+1:02} / {len(HERO_KEYS):02}', True, accent)
         screen.blit(serial, serial.get_rect(topright=(card.right-28, 225)))
+        for step in (-1, 1):
+            button = hero_arrow_rect(step)
+            hot = button.collidepoint(pygame.mouse.get_pos())
+            pygame.draw.rect(screen, INK, button, border_radius=8)
+            pygame.draw.rect(screen, accent if hot else EDGE, button, 2, border_radius=8)
+            ax, ay = button.center
+            pygame.draw.lines(screen, accent if hot else PAPER, False,
+                              [(ax-step*4, ay-9), (ax+step*5, ay), (ax-step*4, ay+9)], 3)
         # Hero emblem with a contrail, orbit ticks and the fighter's own colours.
         cx, cy = card.centerx, 329
         for j in range(3):

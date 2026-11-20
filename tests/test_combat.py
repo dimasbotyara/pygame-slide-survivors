@@ -84,19 +84,35 @@ class CombatTests(unittest.TestCase):
     def test_cleave_strikes_front_and_back_once(self):
         self.equip('cleave')
         self.game.enemies = [Enemy(x, 0, 'tank') for x in (40, 41, -63, -64, 350)]
-        self.player.fist_attack_active = True
-        self.player.fist_combo_index = 1
-        self.player.fist_total_hits = 1
+        self.player.update_fist_attack(0.016)
         self.game.check_fist_attacks()
         self.game.check_fist_attacks()
         self.assertEqual(len(self.player.fist_hit_enemies), 1)
-        self.player.fist_hit_enemies.clear()
-        self.player.fist_total_hits = 4
+        self.assertEqual(self.player.fist_total_hits, 1)
+        self.player.fist_total_hits = 3  # three landed swings; the next is a cleave
+        self.player.update_fist_attack(1)
         self.game.check_fist_attacks()
         self.assertEqual(self.player.fist_hit_enemies, self.game.enemies[:4])
+        self.assertEqual(self.player.fist_total_hits, 4)
         damage = self.player.damage_dealt
         self.game.check_fist_attacks()
         self.assertEqual(self.player.damage_dealt, damage)
+
+    def test_empty_swings_do_not_build_or_refresh_the_fist_series(self):
+        p = self.player
+        for _ in range(8):
+            p.update_fist_attack(0.7)
+            self.game.check_fist_attacks()
+            self.assertFalse(p.fist_is_mega)
+        self.assertEqual((p.fist_total_hits, p.fist_combo_index, p.fist_combo_timer), (0, 0, 0))
+        self.game.enemies = [Enemy(30, 0, 'tank')]
+        self.game.check_fist_attacks()
+        self.assertEqual((p.fist_total_hits, p.fist_combo_index), (1, 1))
+        self.game.enemies.clear()
+        for _ in range(2):
+            p.update_fist_attack(0.7)
+            self.game.check_fist_attacks()
+        self.assertEqual((p.fist_total_hits, p.fist_combo_index), (1, 0))
 
     def test_utility_upgrades_and_translations(self):
         for key in ('combo_grace', 'ult_per_kill', 'hit_grace', 'boost_duration', 'dash_heal', 'cleave'):

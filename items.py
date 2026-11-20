@@ -4,6 +4,7 @@ import pygame
 import math
 import random
 from settings import *
+from consumables import TONICS, TONIC_IDS, tonic_icon
 
 
 class XPOrb:
@@ -96,7 +97,9 @@ class DroppedItem:
         self.anim_timer = 0.0
 
         # Цвета и описание
-        if item_type == "heal":
+        if item_type in TONICS:
+            self.color = TONICS[item_type].color
+        elif item_type == "heal":
             self.color = GREEN
             self.secondary_color = WHITE
         elif item_type == "magnet":
@@ -150,7 +153,13 @@ class DroppedItem:
         bob = math.sin(self.anim_timer * 3) * 3
 
         # Рисуем предмет в зависимости от типа
-        if self.item_type == "heal":
+        if self.item_type in TONICS:
+            center = sx, int(sy + bob)
+            pygame.draw.circle(screen, (27, 29, 44), center, 12)
+            pygame.draw.circle(screen, self.color, center, 12, 2)
+            icon = tonic_icon(self.item_type)
+            screen.blit(icon, icon.get_rect(center=center))
+        elif self.item_type == "heal":
             # Крестик
             pygame.draw.rect(screen, self.color,
                            (sx - 3, int(sy - 8 + bob), 6, 16))
@@ -199,7 +208,6 @@ def roll_drop(player_luck_bonus=0):
     """Определить, что выпадет при убийстве врага"""
     luck_mult = 1.0 + player_luck_bonus / 100
 
-    roll = random.random()
     cumulative = 0
 
     drops = [
@@ -209,9 +217,16 @@ def roll_drop(player_luck_bonus=0):
         ("bomb", DROP_CHANCE_BOMB * luck_mult),
     ]
 
+    tonic_chance = DROP_CHANCE_TONIC * luck_mult
+    total = sum(chance for _, chance in drops) + tonic_chance
+    # At very high drop bonuses, keep every item reachable, still at most one per kill.
+    roll = random.random() * max(1.0, total)
     for item_type, chance in drops:
         cumulative += chance
         if roll < cumulative:
             return item_type
 
+    # One extra pool, not a separate roll for every tonic; old item odds stay intact.
+    if roll < cumulative + tonic_chance:
+        return random.choice(TONIC_IDS)
     return None
