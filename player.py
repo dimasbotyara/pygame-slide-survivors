@@ -115,6 +115,9 @@ class Player:
             "time_warp": 0, "giant_growth": 0, "adrenaline": 0,
             "double_impact_chance": 0, "orbital_blade_count": 0,
             "heal_on_kills": 0,
+            "ice_trail": 0, "repulse_aura": 0, "drain_aura": 0, "stasis_aura": 0,
+            "cleave": 0, "combo_grace": 0, "ult_per_kill": 0,
+            "hit_grace": 0, "boost_duration": 0, "dash_heal": 0,
         }
 
         # Ультимейт, щит и статистика
@@ -154,9 +157,12 @@ class Player:
         # Kill комбо
         self.combo_count = 0
         self.combo_timer = 0.0
+        self.combo_window = COMBO_TIMEOUT
         self.combo_max_reached = 0
 
         # Кулаки
+        self.dodge_charge = False
+        self.fist_dodge_cleave = False
         self.fist_combo_index = 0
         self.fist_combo_timer = 0.0
         self.fist_cooldown_timer = 0.0
@@ -378,6 +384,7 @@ class Player:
             self.combo_timer -= dt
             if self.combo_timer <= 0:
                 self.combo_count = 0
+                self.combo_timer = 0.0
 
         if self.dash_attack_window_timer > 0:
             self.dash_attack_window_timer -= dt
@@ -616,6 +623,8 @@ class Player:
             current_hit = self.fist_combo_index % max_combo
 
             self.fist_total_hits += 1
+            self.fist_dodge_cleave = self.dodge_charge
+            self.dodge_charge = False
 
             # Мега-удар?
             self.fist_is_mega = (self.fist_total_hits % FIST_MEGA_HIT_EVERY == 0)
@@ -660,8 +669,13 @@ class Player:
         knockback = self.get_fist_knockback_for_hit(current_hit)
         is_finisher = self.fist_is_mega or (current_hit == max_combo - 1)
 
+        cleave = self.fist_dodge_cleave or (self.stats["cleave"] > 0 and self.fist_total_hits % 4 == 0)
+        if cleave:
+            arc = 360
+            attack_range += 24
+
         return {
-            "x": self.x, "y": self.y,
+            "x": self.x, "y": self.y, "cleave": cleave,
             "range": attack_range, "angle": self.facing_angle,
             "arc": math.radians(arc / 2), "damage": damage,
             "knockback": knockback, "combo_index": current_hit,
@@ -688,9 +702,19 @@ class Player:
     # ── Комбо ──
     def add_combo(self):
         self.combo_count += 1
-        self.combo_timer = COMBO_TIMEOUT
+        # A kill refreshes the ordinary window, but never cuts bomb time short.
+        base_window = COMBO_TIMEOUT + self.stats["combo_grace"]
+        if self.combo_timer <= base_window:
+            self.combo_window = self.combo_timer = base_window
         if self.combo_count > self.combo_max_reached:
             self.combo_max_reached = self.combo_count
+
+    def extend_active_combo(self, seconds):
+        if self.combo_count > 0:
+            self.combo_timer += seconds
+            self.combo_window = self.combo_timer
+            return True
+        return False
 
     # ── Урон ──
     def take_damage(self, damage):
@@ -720,8 +744,8 @@ class Player:
 
         actual_damage = max(1, damage - self.get_armor())
         self.hp -= actual_damage
-        self.invincible_timer = PLAYER_INVINCIBILITY_AFTER_HIT
-        self.flash_timer = PLAYER_INVINCIBILITY_AFTER_HIT
+        self.invincible_timer = PLAYER_INVINCIBILITY_AFTER_HIT + self.stats["hit_grace"]
+        self.flash_timer = self.invincible_timer
         # Ядовитые шипы наносят 8 урона за уровень + обычные шипы
         thorns_damage = self.stats["thorns"] + self.stats.get("poison_thorns", 0) * 8
         self.trigger_counter_attack()
@@ -884,6 +908,9 @@ class Player:
                     extend = 14 if self.fist_is_mega else 10
                     aex = ax + int(math.cos(self.facing_angle) * (arm_len + extend))
                     aey = ay + int(math.sin(self.facing_angle) * (arm_len + extend))
+            if self.dodge_charge or (self.fist_attack_active and self.fist_dodge_cleave):
+                pygame.draw.circle(screen, CYAN, (aex, aey), 8, 2)
+                ac = WHITE
             pygame.draw.line(screen, ac, (ax, ay), (aex, aey), 4)
             pygame.draw.circle(screen, ac, (aex, aey), 5 if (self.fist_attack_active and (self.fist_which_hand == 2 or self.fist_which_hand == i)) else 3)
 
@@ -903,7 +930,10 @@ class Player:
             attack = self.get_fist_attack_area()
             if attack:
                 fr = int(attack["range"])
-                if attack.get("is_mega"):
+                if attack["cleave"]:
+                    pygame.draw.circle(screen, CYAN, (sx, sy), fr, 3)
+                    pygame.draw.circle(screen, WHITE, (sx, sy), fr - 4, 1)
+                elif attack.get("is_mega"):
                     # МЕГА удар — большое кольцо + звёзды
                     pygame.draw.circle(screen, ORANGE, (sx, sy), fr, 4)
                     pygame.draw.circle(screen, YELLOW, (sx, sy), fr - 5, 2)

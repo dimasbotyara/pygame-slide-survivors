@@ -220,7 +220,7 @@ class UI:
         bar_h = 4
         bar_x = combo_x - bar_w // 2
         bar_y = combo_y + h // 2 + 25
-        ratio = max(0.0, min(1.0, player.combo_timer / COMBO_TIMEOUT))
+        ratio = max(0.0, min(1.0, player.combo_timer / player.combo_window))
         pygame.draw.rect(screen, DARK_GRAY, (bar_x, bar_y, bar_w, bar_h))
         pygame.draw.rect(screen, ORANGE, (bar_x, bar_y, int(bar_w * ratio), bar_h))
 
@@ -814,6 +814,7 @@ class UI:
             ("", t("CTRL_SLIDE_INFO_2")),
             ("", t("CTRL_SLIDE_INFO_3")),
             ("", t("CTRL_SLIDE_INFO_4")),
+            ("", t("CTRL_PERFECT_DODGE")),
             ("", ""),
             (t("CTRL_HEADER_DASH"), ""),
             ("", t("CTRL_DASH_INFO_1")),

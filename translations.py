@@ -2,6 +2,31 @@
 
 TRANSLATIONS = {
     "ru": {
+        "MSG_PERFECT_DODGE": "Идеальный уворот! Кулаки заряжены",
+        "CTRL_PERFECT_DODGE": "Белое кольцо: выскользните за край, чтобы зарядить круговой удар.",
+        "upgrade_ice_trail_name": "Ледяной след",
+        "upgrade_ice_trail_desc": "Враги не поворачивают на льду",
+        "upgrade_repulse_aura_name": "Аура отпора",
+        "upgrade_repulse_aura_desc": "Раз в 2,5 с расталкивает врагов",
+        "upgrade_drain_aura_name": "Аура голода",
+        "upgrade_drain_aura_desc": "Раз в 2 с: −8 HP врагу, до +2 HP вам",
+        "upgrade_stasis_aura_name": "Поле стазиса",
+        "upgrade_stasis_aura_desc": "−20% скорости снарядов рядом",
+
+        "MSG_COMBO_EXTENDED": "Комбо +{} с",
+        "upgrade_cleave_name": "Прорубающий удар",
+        "upgrade_cleave_desc": "Каждый 4-й удар бьёт всех вокруг",
+        "upgrade_combo_grace_name": "Чувство ритма",
+        "upgrade_combo_grace_desc": "+0,75 с к окну серии убийств",
+        "upgrade_ult_per_kill_name": "Сбор душ",
+        "upgrade_ult_per_kill_desc": "+1 к заряду ульты за убийство",
+        "upgrade_hit_grace_name": "Передышка",
+        "upgrade_hit_grace_desc": "+0,15 с защиты после ранения",
+        "upgrade_boost_duration_name": "Долгий разгон",
+        "upgrade_boost_duration_desc": "Ускоритель действует на 2 с дольше",
+        "upgrade_dash_heal_name": "Второе дыхание",
+        "upgrade_dash_heal_desc": "+3 HP за результативный дэш-удар",
+
         # Select Language Screen
         "SELECT_LANG_TITLE": "ВЫБОР ЯЗЫКА",
         "SELECT_LANG_HINT": "↑↓ / W S для выбора, Enter для подтверждения",
@@ -308,6 +333,31 @@ TRANSLATIONS = {
         "MSG_BOSS_SPAWNED": "⚠ БОСС ПОЯВИЛСЯ! ⚠",
     },
     "en": {
+        "MSG_PERFECT_DODGE": "Perfect dodge! Cleave ready",
+        "CTRL_PERFECT_DODGE": "White ring: slide clear of its edge to charge a sweeping punch.",
+        "upgrade_ice_trail_name": "Ice Trail",
+        "upgrade_ice_trail_desc": "Foes on ice keep their heading",
+        "upgrade_repulse_aura_name": "Repulsion Aura",
+        "upgrade_repulse_aura_desc": "Push nearby foes every 2.5s",
+        "upgrade_drain_aura_name": "Siphon Aura",
+        "upgrade_drain_aura_desc": "Every 2s: drain 8 HP, heal up to 2",
+        "upgrade_stasis_aura_name": "Stasis Field",
+        "upgrade_stasis_aura_desc": "Nearby enemy shots move 20% slower",
+
+        "MSG_COMBO_EXTENDED": "Combo +{}s",
+        "upgrade_cleave_name": "Cleave",
+        "upgrade_cleave_desc": "Every 4th swing hits all around you",
+        "upgrade_combo_grace_name": "Rhythm",
+        "upgrade_combo_grace_desc": "+0.75s kill combo window",
+        "upgrade_ult_per_kill_name": "Soul Harvest",
+        "upgrade_ult_per_kill_desc": "+1 ultimate charge per kill",
+        "upgrade_hit_grace_name": "Breathing Room",
+        "upgrade_hit_grace_desc": "+0.15s immunity after injury",
+        "upgrade_boost_duration_name": "Long Burn",
+        "upgrade_boost_duration_desc": "Speed pickups last 2s longer",
+        "upgrade_dash_heal_name": "Second Wind",
+        "upgrade_dash_heal_desc": "Heal 3 HP on the first dash hit",
+
         # Select Language Screen
         "SELECT_LANG_TITLE": "SELECT LANGUAGE",
         "SELECT_LANG_HINT": "↑↓ / W S to choose, Enter to confirm",
