@@ -1,0 +1,84 @@
+"""Menu navigation, layout and offline glyph regressions, without a display."""
+import os
+from pathlib import Path
+from tempfile import TemporaryDirectory
+import unittest
+from unittest.mock import patch
+
+os.environ.setdefault('SDL_VIDEODRIVER', 'dummy')
+os.environ.setdefault('SDL_AUDIODRIVER', 'dummy')
+
+import pygame
+from highscores import load_highscores
+from main import Game
+from translations import set_language, t
+from typography import face
+from ui import hero_rect, menu_rect, pause_rect, upgrade_rect, word_lines
+
+
+def press(key):
+    return pygame.event.Event(pygame.KEYDOWN, key=key)
+
+
+def click(rect):
+    return pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=rect.center)
+
+
+class MenuTests(unittest.TestCase):
+    def setUp(self):
+        self.game = Game()
+        self.game.state = 'menu'
+
+    def test_equip_is_not_start_and_escape_keeps_hero(self):
+        g = self.game
+        g.update_menu([click(menu_rect(1))])
+        g.update_hero_select([click(hero_rect(2))])
+        self.assertEqual((g.state, g.selected_hero_index, g.menu_selection), ('menu', 2, 0))
+        self.assertIsNone(g.player)
+        g.update_menu([click(menu_rect(1))])
+        g.update_hero_select([press(pygame.K_LEFT), press(pygame.K_ESCAPE)])
+        self.assertEqual(g.selected_hero_index, 2)
+        g.update_menu([press(pygame.K_UP), press(pygame.K_RETURN)])
+        self.assertEqual((g.state, g.player.hero_id), ('playing', 'spark'))
+
+    def test_surrender_submits_run_once(self):
+        g = self.game
+        g.start_new_game()
+        g.state, g.game_time, g.player.enemies_killed = 'paused', 52, 8
+        with TemporaryDirectory() as folder, patch('highscores.SAVE_DIR', folder), \
+                patch('highscores.HIGHSCORES_FILE', Path(folder)/'scores.json'):
+            g.update_paused([click(pause_rect(2)), press(pygame.K_RETURN)])
+            self.assertEqual((g.state, g.surrendered, g.new_record_pos), ('game_over', True, 0))
+            g.draw_game_over()
+            g.finish_run()  # repeated input cannot insert a duplicate
+            scores = load_highscores()
+            self.assertEqual(len(scores), 1)
+            self.assertEqual((scores[0]['time'], scores[0]['level'], scores[0]['kills']), (52, 1, 8))
+        g.start_new_game()
+        self.assertFalse(g.surrendered)
+
+    def test_offline_fallback_and_language_flags(self):
+        font = self.game.ui.font
+        for text, role in [('🏆', 'emoji'), ('🔒', 'emoji'), ('🇷🇺', 'emoji'), ('🇬🇧', 'emoji'),
+                           ('↑↓', 'mono'), ('✦', 'symbol')]:
+            self.assertEqual(list(font.runs(text)), [(face(role, font.px), text)])
+            surf = font.render(text, True, 'white')
+            self.assertNotEqual(surf.get_bounding_rect().size, (0, 0))
+            self.assertEqual(surf.get_width(), font.size(text)[0])
+        self.game.draw_language_select()
+        self.game.draw_achievements()
+
+    def test_upgrade_labels_fit_in_both_languages(self):
+        g = self.game
+        g.start_new_game()
+        card = upgrade_rect(0, 3)
+        self.addCleanup(set_language, 'ru')
+        for lang in ('ru', 'en'):
+            set_language(lang)
+            for u in g.upgrade_manager.all_upgrades:
+                names = list(word_lines(g.ui.font_medium, u.name, card.w-48))
+                desc = list(word_lines(g.ui.body, u.description, card.w-48))
+                self.assertLessEqual(88 + 36*len(names) + 25*len(desc), card.h-75, u.name)
+                self.assertNotIn('UPGRADE_', t('UPGRADE_LVL', '0 → 1 / 3'))
+            g.ui.draw_upgrade_screen(g.screen, g.upgrade_manager.all_upgrades[:3], 2, g.player)
+            g.draw_menu()

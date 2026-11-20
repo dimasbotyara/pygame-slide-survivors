@@ -334,8 +334,8 @@ UI_HP_BAR_WIDTH = 200
 UI_HP_BAR_HEIGHT = 20
 UI_XP_BAR_HEIGHT = 8
 UI_MARGIN = 10
-UI_UPGRADE_BOX_WIDTH = 350
-UI_UPGRADE_BOX_HEIGHT = 120
+UI_UPGRADE_BOX_WIDTH = 380
+UI_UPGRADE_BOX_HEIGHT = 330
 
 # ============================================================
 # КАРТА

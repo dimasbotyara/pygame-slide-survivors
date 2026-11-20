@@ -18,6 +18,7 @@ import math
 import sys
 import random
 import pygame
+from typography import face
 
 # ── import game modules (untouched) ──────────────────────────────
 import main as _game_main
@@ -70,7 +71,7 @@ class DevConsole:
         self.history = []          # list of (text, color)
         self.cmd_history = []
         self.cmd_index = -1
-        self.font = pygame.font.SysFont("consolas", 18)
+        self.font = face("mono", 18)
 
     def toggle(self):
         self.visible = not self.visible
@@ -392,10 +393,10 @@ class Trainer:
         self.show_offscreen_arrows = False
 
         # ── fonts ──
-        self.f_big   = pygame.font.SysFont("consolas", 26, bold=True)
-        self.f_med   = pygame.font.SysFont("consolas", 20)
-        self.f_sm    = pygame.font.SysFont("consolas", 16)
-        self.f_xs    = pygame.font.SysFont("consolas", 13)
+        self.f_big   = face("mono", 26)
+        self.f_med   = face("mono", 20)
+        self.f_sm    = face("mono", 16)
+        self.f_xs    = face("mono", 13)
 
         # ── menu geometry ──
         self.panel_x = 16

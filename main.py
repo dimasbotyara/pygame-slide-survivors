@@ -14,7 +14,8 @@ from upgrades import UpgradeManager
 from particles import ParticleManager, Particle
 from items import XPOrb, DroppedItem, roll_drop
 from world import World
-from ui import UI
+from ui import (UI, menu_inputs, menu_rect, pause_rect, hero_rect, upgrade_rect,
+                language_rect, settings_rect, result_rect)
 from highscores import add_highscore
 from settings_manager import SettingsManager
 from translations import t
@@ -45,6 +46,8 @@ class Game:
             self.state = "menu"
 
         self.selected_hero_index = 0
+        self.hero_cursor = 0
+        self.surrendered = False
         self.lang_selection = 0
         self.menu_selection = 0
         self.settings_selection = 0
@@ -143,6 +146,7 @@ class Game:
     # ================================================================
     def start_new_game(self):
         """Начать новую игру — сбросить все объекты"""
+        self.surrendered = False
         hero_id = HERO_KEYS[self.selected_hero_index]
         self.player = Player(0, 0, hero_id=hero_id)
         self.camera = Camera(SCREEN_WIDTH, SCREEN_HEIGHT)
@@ -173,18 +177,22 @@ class Game:
     # ВЫБОР ЯЗЫКА ПРИ ПЕРВОМ ЗАПУСКЕ
     # ================================================================
     def update_language_select(self, events):
-        for event in events:
-            if event.type == pygame.KEYDOWN:
-                if event.key in (pygame.K_UP, pygame.K_w):
-                    self.lang_selection = (self.lang_selection - 1) % 2
-                elif event.key in (pygame.K_DOWN, pygame.K_s):
-                    self.lang_selection = (self.lang_selection + 1) % 2
-                elif event.key in (pygame.K_RETURN, pygame.K_SPACE):
-                    lang = "ru" if self.lang_selection == 0 else "en"
-                    self.settings_manager.set("language", lang)
-                    self.settings_manager.set("first_launch", False)
-                    self.state = "menu"
-                    self.menu_selection = 0
+        rects = [language_rect(i) for i in range(2)]
+        for hovered, key in menu_inputs(events, rects):
+            if hovered is not None:
+                self.lang_selection = hovered
+            if key is None:
+                continue
+            if key in (pygame.K_UP, pygame.K_w):
+                self.lang_selection = (self.lang_selection - 1) % 2
+            elif key in (pygame.K_DOWN, pygame.K_s):
+                self.lang_selection = (self.lang_selection + 1) % 2
+            elif key in (pygame.K_RETURN, pygame.K_SPACE):
+                lang = "ru" if self.lang_selection == 0 else "en"
+                self.settings_manager.set("language", lang)
+                self.settings_manager.set("first_launch", False)
+                self.state = "menu"
+                self.menu_selection = 0
 
     def draw_language_select(self):
         self.ui.draw_language_select_screen(self.screen, self.lang_selection)
@@ -193,19 +201,27 @@ class Game:
     # ВЫБОР ПЕРСОНАЖА
     # ================================================================
     def update_hero_select(self, events):
-        for event in events:
-            if event.type == pygame.KEYDOWN:
-                if event.key in (pygame.K_LEFT, pygame.K_a):
-                    self.selected_hero_index = (self.selected_hero_index - 1) % len(HERO_KEYS)
-                elif event.key in (pygame.K_RIGHT, pygame.K_d):
-                    self.selected_hero_index = (self.selected_hero_index + 1) % len(HERO_KEYS)
-                elif event.key == pygame.K_RETURN:
-                    self.start_new_game()
-                elif event.key == pygame.K_ESCAPE:
-                    self.state = "menu"
+        rects = [hero_rect(i) for i in range(len(HERO_KEYS))]
+        for hovered, key in menu_inputs(events, rects):
+            if hovered is not None:
+                self.hero_cursor = hovered
+            if key is None:
+                continue
+            if key in (pygame.K_LEFT, pygame.K_a):
+                self.hero_cursor = (self.hero_cursor - 1) % len(HERO_KEYS)
+            elif key in (pygame.K_RIGHT, pygame.K_d):
+                self.hero_cursor = (self.hero_cursor + 1) % len(HERO_KEYS)
+            elif key == pygame.K_RETURN:
+                self.selected_hero_index = self.hero_cursor
+                self.menu_selection = 0
+                self.state = "menu"
+                return
+            elif key == pygame.K_ESCAPE:
+                self.state = "menu"
+                return
 
     def draw_hero_select(self):
-        self.ui.draw_hero_select_screen(self.screen, self.selected_hero_index)
+        self.ui.draw_hero_select_screen(self.screen, self.hero_cursor)
 
     # ================================================================
     # ДОСТИЖЕНИЯ
@@ -223,29 +239,35 @@ class Game:
     # ГЛАВНОЕ МЕНЮ
     # ================================================================
     def update_menu(self, events):
-        for event in events:
-            if event.type == pygame.KEYDOWN:
-                if event.key in (pygame.K_UP, pygame.K_w):
-                    self.menu_selection = (self.menu_selection - 1) % 7
-                elif event.key in (pygame.K_DOWN, pygame.K_s):
-                    self.menu_selection = (self.menu_selection + 1) % 7
-                elif event.key == pygame.K_RETURN:
-                    if self.menu_selection == 0:
-                        self.start_new_game()
-                    elif self.menu_selection == 1:
-                        self.state = "hero_select"
-                    elif self.menu_selection == 2:
-                        self.state = "achievements"
-                    elif self.menu_selection == 3:
-                        self.settings_previous_state = "menu"
-                        self.settings_selection = 0
-                        self.state = "settings"
-                    elif self.menu_selection == 4:
-                        self.state = "controls"
-                    elif self.menu_selection == 5:
-                        self.state = "highscores"
-                    elif self.menu_selection == 6:
-                        self.running = False
+        rects = [menu_rect(i) for i in range(7)]
+        for hovered, key in menu_inputs(events, rects):
+            if hovered is not None:
+                self.menu_selection = hovered
+            if key is None:
+                continue
+            if key in (pygame.K_UP, pygame.K_w):
+                self.menu_selection = (self.menu_selection - 1) % 7
+            elif key in (pygame.K_DOWN, pygame.K_s):
+                self.menu_selection = (self.menu_selection + 1) % 7
+            elif key == pygame.K_RETURN:
+                if self.menu_selection == 0:
+                    self.start_new_game()
+                elif self.menu_selection == 1:
+                    self.hero_cursor = self.selected_hero_index
+                    self.state = "hero_select"
+                elif self.menu_selection == 2:
+                    self.state = "achievements"
+                elif self.menu_selection == 3:
+                    self.settings_previous_state = "menu"
+                    self.settings_selection = 0
+                    self.state = "settings"
+                elif self.menu_selection == 4:
+                    self.state = "controls"
+                elif self.menu_selection == 5:
+                    self.state = "highscores"
+                elif self.menu_selection == 6:
+                    self.running = False
+                return
 
     def draw_menu(self):
         self.ui.draw_main_menu(self.screen, self.menu_selection, self.selected_hero_index)
@@ -254,36 +276,40 @@ class Game:
     # ЭКРАН НАСТРОЕК
     # ================================================================
     def update_settings(self, events):
-        for event in events:
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_ESCAPE:
+        rects = [settings_rect(i) for i in range(5)]
+        for hovered, key in menu_inputs(events, rects):
+            if hovered is not None:
+                self.settings_selection = hovered
+            if key is None:
+                continue
+            if key == pygame.K_ESCAPE:
+                self.settings_manager.save()
+                self.state = getattr(self, "settings_previous_state", "menu")
+            elif key in (pygame.K_UP, pygame.K_w):
+                self.settings_selection = (self.settings_selection - 1) % 5
+            elif key in (pygame.K_DOWN, pygame.K_s):
+                self.settings_selection = (self.settings_selection + 1) % 5
+            elif key in (pygame.K_LEFT, pygame.K_RIGHT, pygame.K_RETURN, pygame.K_a, pygame.K_d, pygame.K_SPACE):
+                if self.settings_selection == 0:
+                    cur_lang = self.settings_manager.get("language", "ru")
+                    new_lang = "en" if cur_lang == "ru" else "ru"
+                    self.settings_manager.set("language", new_lang)
+                elif self.settings_selection == 1:
+                    cur = self.settings_manager.get("screen_shake", True)
+                    self.settings_manager.set("screen_shake", not cur)
+                    if self.camera:
+                        self.camera.shake_enabled = not cur
+                elif self.settings_selection == 2:
+                    cur = self.settings_manager.get("damage_numbers", True)
+                    self.settings_manager.set("damage_numbers", not cur)
+                    if self.particle_manager:
+                        self.particle_manager.damage_numbers_enabled = not cur
+                elif self.settings_selection == 3:
+                    cur = self.settings_manager.get("minimap", True)
+                    self.settings_manager.set("minimap", not cur)
+                elif self.settings_selection == 4:
                     self.settings_manager.save()
                     self.state = getattr(self, "settings_previous_state", "menu")
-                elif event.key in (pygame.K_UP, pygame.K_w):
-                    self.settings_selection = (self.settings_selection - 1) % 5
-                elif event.key in (pygame.K_DOWN, pygame.K_s):
-                    self.settings_selection = (self.settings_selection + 1) % 5
-                elif event.key in (pygame.K_LEFT, pygame.K_RIGHT, pygame.K_RETURN, pygame.K_a, pygame.K_d, pygame.K_SPACE):
-                    if self.settings_selection == 0:
-                        cur_lang = self.settings_manager.get("language", "ru")
-                        new_lang = "en" if cur_lang == "ru" else "ru"
-                        self.settings_manager.set("language", new_lang)
-                    elif self.settings_selection == 1:
-                        cur = self.settings_manager.get("screen_shake", True)
-                        self.settings_manager.set("screen_shake", not cur)
-                        if self.camera:
-                            self.camera.shake_enabled = not cur
-                    elif self.settings_selection == 2:
-                        cur = self.settings_manager.get("damage_numbers", True)
-                        self.settings_manager.set("damage_numbers", not cur)
-                        if self.particle_manager:
-                            self.particle_manager.damage_numbers_enabled = not cur
-                    elif self.settings_selection == 3:
-                        cur = self.settings_manager.get("minimap", True)
-                        self.settings_manager.set("minimap", not cur)
-                    elif self.settings_selection == 4:
-                        self.settings_manager.save()
-                        self.state = getattr(self, "settings_previous_state", "menu")
 
     def draw_settings(self):
         self.ui.draw_settings_screen(self.screen, self.settings_selection, self.settings_manager)
@@ -316,24 +342,33 @@ class Game:
     # ПАУЗА
     # ================================================================
     def update_paused(self, events):
-        for event in events:
-            if event.type == pygame.KEYDOWN:
-                if event.key in (pygame.K_ESCAPE, pygame.K_p):
+        rects = [pause_rect(i) for i in range(4)]
+        for hovered, key in menu_inputs(events, rects):
+            if hovered is not None:
+                self.pause_selection = hovered
+            if key is None:
+                continue
+            if key in (pygame.K_ESCAPE, pygame.K_p):
+                self.state = "playing"
+                return
+            elif key in (pygame.K_UP, pygame.K_w):
+                self.pause_selection = (self.pause_selection - 1) % 4
+            elif key in (pygame.K_DOWN, pygame.K_s):
+                self.pause_selection = (self.pause_selection + 1) % 4
+            elif key == pygame.K_RETURN:
+                if self.pause_selection == 0:
                     self.state = "playing"
-                elif event.key in (pygame.K_UP, pygame.K_w):
-                    self.pause_selection = (self.pause_selection - 1) % 3
-                elif event.key in (pygame.K_DOWN, pygame.K_s):
-                    self.pause_selection = (self.pause_selection + 1) % 3
-                elif event.key == pygame.K_RETURN:
-                    if self.pause_selection == 0:
-                        self.state = "playing"
-                    elif self.pause_selection == 1:
-                        self.settings_previous_state = "paused"
-                        self.settings_selection = 0
-                        self.state = "settings"
-                    elif self.pause_selection == 2:
-                        self.state = "menu"
-                        self.menu_selection = 0
+                elif self.pause_selection == 1:
+                    self.settings_previous_state = "paused"
+                    self.settings_selection = 0
+                    self.state = "settings"
+                elif self.pause_selection == 2:
+                    self.finish_run(surrendered=True)
+                    return
+                elif self.pause_selection == 3:
+                    self.state = "menu"
+                    self.menu_selection = 0
+                return
 
     def draw_paused(self):
         self.draw_playing()
@@ -343,24 +378,28 @@ class Game:
     # GAME OVER
     # ================================================================
     def update_game_over(self, events):
-        for event in events:
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_UP:
-                    self.game_over_selection = (self.game_over_selection - 1) % 2
-                elif event.key == pygame.K_DOWN:
-                    self.game_over_selection = (self.game_over_selection + 1) % 2
-                elif event.key == pygame.K_RETURN:
-                    if self.game_over_selection == 0:
-                        self.start_new_game()
-                    elif self.game_over_selection == 1:
-                        self.state = "menu"
-                        self.menu_selection = 0
+        rects = [result_rect(i) for i in range(2)]
+        for hovered, key in menu_inputs(events, rects):
+            if hovered is not None:
+                self.game_over_selection = hovered
+            if key is None:
+                continue
+            if key == pygame.K_UP:
+                self.game_over_selection = (self.game_over_selection - 1) % 2
+            elif key == pygame.K_DOWN:
+                self.game_over_selection = (self.game_over_selection + 1) % 2
+            elif key == pygame.K_RETURN:
+                if self.game_over_selection == 0:
+                    self.start_new_game()
+                elif self.game_over_selection == 1:
+                    self.state = "menu"
+                    self.menu_selection = 0
 
     def draw_game_over(self):
         self.draw_playing()
         self.ui.draw_game_over(
             self.screen, self.player, self.game_time,
-            self.game_over_selection, self.new_record_pos
+            self.game_over_selection, self.new_record_pos, self.surrendered
         )
 
     # ================================================================
@@ -368,20 +407,28 @@ class Game:
     # ================================================================
     def update_upgrading(self, events):
         um = self.upgrade_manager
-        for event in events:
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_LEFT:
-                    um.selected_index = (um.selected_index - 1) % len(um.choices)
-                elif event.key == pygame.K_RIGHT:
-                    um.selected_index = (um.selected_index + 1) % len(um.choices)
-                elif event.key == pygame.K_RETURN:
-                    self._apply_upgrade_choice(um.selected_index)
-                elif event.key == pygame.K_1 and len(um.choices) >= 1:
-                    self._apply_upgrade_choice(0)
-                elif event.key == pygame.K_2 and len(um.choices) >= 2:
-                    self._apply_upgrade_choice(1)
-                elif event.key == pygame.K_3 and len(um.choices) >= 3:
-                    self._apply_upgrade_choice(2)
+        rects = [upgrade_rect(i, len(um.choices)) for i in range(len(um.choices))]
+        for hovered, key in menu_inputs(events, rects):
+            if hovered is not None:
+                um.selected_index = hovered
+            if key is None:
+                continue
+            if key == pygame.K_LEFT:
+                um.selected_index = (um.selected_index - 1) % len(um.choices)
+            elif key == pygame.K_RIGHT:
+                um.selected_index = (um.selected_index + 1) % len(um.choices)
+            elif key == pygame.K_RETURN:
+                self._apply_upgrade_choice(um.selected_index)
+                return
+            elif key == pygame.K_1 and len(um.choices) >= 1:
+                self._apply_upgrade_choice(0)
+                return
+            elif key == pygame.K_2 and len(um.choices) >= 2:
+                self._apply_upgrade_choice(1)
+                return
+            elif key == pygame.K_3 and len(um.choices) >= 3:
+                self._apply_upgrade_choice(2)
+                return
 
     def _apply_upgrade_choice(self, index):
         """Применить выбранное улучшение"""
@@ -571,11 +618,15 @@ class Game:
 
         # Проверить смерть игрока
         if not self.player.is_alive():
-            self.new_record_pos = add_highscore(
-                self.game_time, self.player.level, self.player.enemies_killed
-            )
-            self.state = "game_over"
-            self.game_over_selection = 0
+            self.finish_run()
+
+    def finish_run(self, surrendered=False):
+        if self.state == "game_over":
+            return
+        self.surrendered = surrendered
+        self.new_record_pos = add_highscore(self.game_time, self.player.level, self.player.enemies_killed)
+        self.state = "game_over"
+        self.game_over_selection = 0
 
     def trigger_hero_ult(self):
         """Активация ультимативной способности текущего героя"""

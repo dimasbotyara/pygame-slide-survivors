@@ -5,6 +5,7 @@ import math
 import random
 from settings import *
 from translations import t
+from typography import face
 
 
 
@@ -637,7 +638,7 @@ class Boss(Enemy):
         pygame.draw.rect(screen, WHITE, (bar_x, bar_y, bar_w, bar_h), 1)
 
         # Имя
-        font = pygame.font.SysFont("Arial", 14, bold=True)
+        font = face("display", 14)
         name = font.render("БОСС", True, GOLD)
         screen.blit(name, (sx - name.get_width() // 2, bar_y - 18))
 
