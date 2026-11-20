@@ -4,6 +4,7 @@ import pygame
 import random
 import math
 from settings import *
+from typography import TextFont
 
 
 class Particle:
@@ -96,11 +97,11 @@ class DamageNumber:
 class GameMessage:
     """Игровое сообщение на экране (например, 'Враги усилились!')"""
 
-    def __init__(self, text, color=YELLOW):
+    def __init__(self, text, color=YELLOW, duration=MESSAGE_DURATION):
         self.text = text
         self.color = color
-        self.lifetime = MESSAGE_DURATION
-        self.max_lifetime = MESSAGE_DURATION
+        self.lifetime = duration
+        self.max_lifetime = duration
 
     def update(self, dt):
         self.lifetime -= dt
@@ -110,26 +111,29 @@ class GameMessage:
             return
 
         progress = self.lifetime / self.max_lifetime
-        alpha = int(255 * min(1.0, progress * 2))  # Затухание в конце
-
-        text_surface = font.render(self.text, True, self.color)
-        text_rect = text_surface.get_rect(
-            center=(SCREEN_WIDTH // 2, 120 + y_offset)
-        )
-
-        # Фоновая подложка
-        bg_rect = text_rect.inflate(20, 10)
-        bg_surface = pygame.Surface(
-            (bg_rect.width, bg_rect.height), pygame.SRCALPHA
-        )
-        bg_surface.fill((0, 0, 0, min(180, alpha)))
-        screen.blit(bg_surface, bg_rect)
-
-        # Рамка
-        pygame.draw.rect(screen, self.color, bg_rect, 1)
-
-        # Текст
-        screen.blit(text_surface, text_rect)
+        age = self.max_lifetime-self.lifetime
+        alpha = round(255*min(1, age/.18, self.lifetime/.4))
+        lines, line = [], ''
+        for word in self.text.split():
+            candidate = (line+' '+word).strip()
+            if line and font.size(candidate)[0] > 500:
+                lines.append(line)
+                line = word
+            else:
+                line = candidate
+        lines.append(line)
+        height = 24+len(lines)*23
+        card = pygame.Surface((550, height), pygame.SRCALPHA)
+        pygame.draw.rect(card, (15, 24, 37, 240), card.get_rect(), border_radius=9)
+        pygame.draw.rect(card, (54, 73, 91), card.get_rect(), 1, border_radius=9)
+        pygame.draw.rect(card, self.color, (0, 9, 4, height-18), border_radius=2)
+        for i, text in enumerate(lines):
+            card.blit(font.render(text, True, (233, 242, 246)), (20, 10+i*23))
+        pygame.draw.rect(card, (38, 50, 65), (20, height-7, 510, 2))
+        pygame.draw.rect(card, self.color, (20, height-7, round(510*progress), 2))
+        card.set_alpha(alpha)
+        screen.blit(card, (SCREEN_WIDTH//2-275, 113+y_offset-round(9*max(0, 1-age/.18))))
+        return height+8
 
 
 class ParticleManager:
@@ -140,6 +144,21 @@ class ParticleManager:
         self.damage_numbers = []
         self.messages = []
         self.damage_numbers_enabled = True
+        self.density = 2
+        self.budget = 2400
+        self.culling_enabled = True
+        self.notifications_enabled = True
+        self.message_duration = 2.5
+        self.message_font = TextFont('body', 18)
+
+    def _count(self, count):
+        desired = count*self.density
+        amount = int(desired) + int(random.random() < desired-int(desired))
+        return min(max(0, self.budget-len(self.particles)), amount)
+
+    def emit(self, particle):
+        if self.density > 0 and len(self.particles) < self.budget:
+            self.particles.append(particle)
 
     def update(self, dt):
         # Частицы
@@ -160,22 +179,25 @@ class ParticleManager:
     def draw(self, screen, camera, font_small, font_normal):
         # Частицы
         for p in self.particles:
-            p.draw(screen, camera)
+            sx, sy = camera.apply(p.x, p.y)
+            if not self.culling_enabled or (-20 <= sx <= SCREEN_WIDTH+20 and -20 <= sy <= SCREEN_HEIGHT+20):
+                p.draw(screen, camera)
 
         # Числа урона
         for d in self.damage_numbers:
             d.draw(screen, camera, font_small, font_normal)
 
         # Сообщения (поверх всего, экранные координаты)
-        for i, m in enumerate(self.messages):
-            m.draw(screen, font_normal, y_offset=i * 40)
+        offset = 0
+        for m in self.messages[-4:]:
+            offset += m.draw(screen, self.message_font, y_offset=offset) or 0
 
     # ================================================================
     # УДОБНЫЕ МЕТОДЫ ДЛЯ СОЗДАНИЯ ЭФФЕКТОВ
     # ================================================================
     def spawn_hit_particles(self, x, y, color=WHITE, count=8):
         """Частицы при попадании"""
-        for _ in range(count):
+        for _ in range(self._count(count)):
             angle = random.uniform(0, math.pi * 2)
             speed = random.uniform(50, 200)
             vx = math.cos(angle) * speed
@@ -186,7 +208,7 @@ class ParticleManager:
 
     def spawn_death_particles(self, x, y, color=RED, count=20):
         """Частицы при смерти врага"""
-        for _ in range(count):
+        for _ in range(self._count(count)):
             angle = random.uniform(0, math.pi * 2)
             speed = random.uniform(80, 300)
             vx = math.cos(angle) * speed
@@ -203,7 +225,7 @@ class ParticleManager:
 
     def spawn_xp_particles(self, x, y, count=6):
         """Частицы при сборе опыта"""
-        for _ in range(count):
+        for _ in range(self._count(count)):
             angle = random.uniform(0, math.pi * 2)
             speed = random.uniform(30, 100)
             vx = math.cos(angle) * speed
@@ -214,7 +236,7 @@ class ParticleManager:
 
     def spawn_slide_particles(self, x, y, dir_x, dir_y, count=2):
         """Частицы при скольжении (след)"""
-        for _ in range(count):
+        for _ in range(self._count(count)):
             vx = -dir_x * random.uniform(50, 150) + random.uniform(-30, 30)
             vy = -dir_y * random.uniform(50, 150) + random.uniform(-30, 30)
             lifetime = random.uniform(0.3, 0.6)
@@ -223,7 +245,7 @@ class ParticleManager:
 
     def spawn_level_up_particles(self, x, y, count=30):
         """Частицы при повышении уровня"""
-        for _ in range(count):
+        for _ in range(self._count(count)):
             angle = random.uniform(0, math.pi * 2)
             speed = random.uniform(100, 350)
             vx = math.cos(angle) * speed
@@ -235,7 +257,7 @@ class ParticleManager:
 
     def spawn_heal_particles(self, x, y, count=12):
         """Частицы при лечении"""
-        for _ in range(count):
+        for _ in range(self._count(count)):
             angle = random.uniform(0, math.pi * 2)
             speed = random.uniform(40, 120)
             vx = math.cos(angle) * speed
@@ -246,7 +268,7 @@ class ParticleManager:
 
     def spawn_bomb_particles(self, x, y, count=40):
         """Частицы при взрыве бомбы"""
-        for _ in range(count):
+        for _ in range(self._count(count)):
             angle = random.uniform(0, math.pi * 2)
             speed = random.uniform(100, 500)
             vx = math.cos(angle) * speed
@@ -264,14 +286,21 @@ class ParticleManager:
 
     def add_message(self, text, color=YELLOW):
         """Добавить сообщение на экран"""
-        self.messages.append(GameMessage(text, color))
+        if not self.notifications_enabled:
+            return
+        for message in self.messages:
+            if message.text == text:
+                message.lifetime = message.max_lifetime
+                return
+        self.messages.append(GameMessage(text, color, self.message_duration))
+        self.messages = self.messages[-4:]
 
     # ================================================================
     # НОВЫЕ ЭФФЕКТЫ
     # ================================================================
     def spawn_crit_particles(self, x, y, count=15):
         """Золотая вспышка при критическом ударе"""
-        for _ in range(count):
+        for _ in range(self._count(count)):
             angle = random.uniform(0, math.pi * 2)
             speed = random.uniform(150, 400)
             vx = math.cos(angle) * speed
@@ -283,7 +312,7 @@ class ParticleManager:
 
     def spawn_mega_hit_particles(self, x, y, count=35):
         """Эпический взрыв при мега-ударе"""
-        for _ in range(count):
+        for _ in range(self._count(count)):
             angle = random.uniform(0, math.pi * 2)
             speed = random.uniform(200, 600)
             vx = math.cos(angle) * speed
@@ -295,7 +324,7 @@ class ParticleManager:
 
     def spawn_combo_milestone_particles(self, x, y, combo_count):
         """Праздничное кольцо частиц при комбо 50/100/200"""
-        ring_count = min(60, 20 + combo_count // 5)
+        ring_count = self._count(min(60, 20 + combo_count // 5))
         for i in range(ring_count):
             angle = (i / ring_count) * math.pi * 2
             speed = random.uniform(200, 450)
@@ -308,7 +337,7 @@ class ParticleManager:
 
     def spawn_orbital_blade_hit(self, x, y, count=6):
         """Искры при попадании орбитального клинка"""
-        for _ in range(count):
+        for _ in range(self._count(count)):
             angle = random.uniform(0, math.pi * 2)
             speed = random.uniform(60, 180)
             vx = math.cos(angle) * speed
@@ -320,7 +349,7 @@ class ParticleManager:
 
     def spawn_poison_particles(self, x, y, count=5):
         """Ядовитые пузырьки (поднимаются вверх)"""
-        for _ in range(count):
+        for _ in range(self._count(count)):
             vx = random.uniform(-30, 30)
             vy = random.uniform(-120, -40)
             lifetime = random.uniform(0.5, 1.0)
@@ -330,7 +359,7 @@ class ParticleManager:
 
     def spawn_shield_break_particles(self, x, y, count=12):
         """Осколки щита при поглощении урона"""
-        for _ in range(count):
+        for _ in range(self._count(count)):
             angle = random.uniform(0, math.pi * 2)
             speed = random.uniform(100, 300)
             vx = math.cos(angle) * speed
@@ -342,7 +371,7 @@ class ParticleManager:
 
     def spawn_executioner_particles(self, x, y, count=18):
         """Кровавый взрыв при казни"""
-        for _ in range(count):
+        for _ in range(self._count(count)):
             angle = random.uniform(0, math.pi * 2)
             speed = random.uniform(150, 400)
             vx = math.cos(angle) * speed
@@ -354,7 +383,7 @@ class ParticleManager:
 
     def spawn_electric_particles(self, x, y, count=8):
         """Электрические искры"""
-        for _ in range(count):
+        for _ in range(self._count(count)):
             angle = random.uniform(0, math.pi * 2)
             speed = random.uniform(100, 350)
             vx = math.cos(angle) * speed

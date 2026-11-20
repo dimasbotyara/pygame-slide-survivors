@@ -7,13 +7,9 @@ from translations import set_language
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 SETTINGS_FILE = os.path.join(SCRIPT_DIR, "settings.json")
 
-DEFAULT_SETTINGS = {
-    "language": "ru",
-    "first_launch": True,
-    "screen_shake": True,
-    "damage_numbers": True,
-    "minimap": True,
-}
+from preferences import DEFAULTS, valid_value
+
+DEFAULT_SETTINGS = DEFAULTS
 
 
 class SettingsManager:
@@ -26,7 +22,9 @@ class SettingsManager:
             try:
                 with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
                     data = json.load(f)
-                    self.settings.update(data)
+                    if isinstance(data, dict):
+                        self.settings.update({k: tuple(v) if k == "resolution" else v
+                                              for k, v in data.items() if valid_value(k, v)})
             except Exception as e:
                 print(f"Error loading settings: {e}")
         else:
