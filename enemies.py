@@ -305,7 +305,7 @@ class Enemy:
         sx, sy = camera.apply(self.x, self.y)
         sx, sy = int(sx), int(sy)
 
-        if sx < -60 or sx > SCREEN_WIDTH + 60 or sy < -60 or sy > SCREEN_HEIGHT + 60:
+        if getattr(camera, "culling_enabled", True) and (sx < -60 or sx > SCREEN_WIDTH + 60 or sy < -60 or sy > SCREEN_HEIGHT + 60):
             return
 
         color = WHITE if self.flash_timer > 0 else self.color
@@ -582,7 +582,7 @@ class Boss(Enemy):
         sx, sy = camera.apply(self.x, self.y)
         sx, sy = int(sx), int(sy)
 
-        if sx < -100 or sx > SCREEN_WIDTH + 100 or sy < -100 or sy > SCREEN_HEIGHT + 100:
+        if getattr(camera, "culling_enabled", True) and (sx < -100 or sx > SCREEN_WIDTH + 100 or sy < -100 or sy > SCREEN_HEIGHT + 100):
             return
 
         color = WHITE if self.flash_timer > 0 else self.color

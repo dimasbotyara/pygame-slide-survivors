@@ -41,15 +41,19 @@ class MenuTests(unittest.TestCase):
         g.update_menu([press(pygame.K_UP), press(pygame.K_RETURN)])
         self.assertEqual((g.state, g.player.hero_id), ('playing', 'spark'))
 
-    def test_digits_activate_numbered_rows_and_toggle_settings(self):
+    def test_digits_activate_menus_but_select_tabs_in_settings(self):
         g = self.game
         g.update_menu([press(pygame.K_4)])
         self.assertEqual(g.state, 'settings')
         with patch.object(g.settings_manager, 'save'):
             before = g.settings_manager.get('screen_shake')
             g.update_settings([press(pygame.K_KP2)])
+            self.assertEqual(g.settings_tab, 1)
+            self.assertEqual(g.settings_manager.get('screen_shake'), before)
+            g.settings_selection = 2
+            g.update_settings([press(pygame.K_RETURN)])
             self.assertEqual(g.settings_manager.get('screen_shake'), not before)
-            g.update_settings([press(pygame.K_5)])
+            g.update_settings([press(pygame.K_ESCAPE)])
         self.assertEqual(g.state, 'menu')
         for digit, state in [(2, 'hero_select'), (3, 'achievements'), (5, 'controls'), (6, 'highscores')]:
             g.state = 'menu'

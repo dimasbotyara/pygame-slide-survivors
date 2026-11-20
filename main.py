@@ -14,12 +14,14 @@ from upgrades import UpgradeManager
 from particles import ParticleManager, Particle
 from items import XPOrb, DroppedItem, roll_drop
 from world import World
-from wildlife import RESIDENT_BY_BIOME
 from consumables import TONICS
 from ui import (UI, menu_inputs, menu_rect, pause_rect, hero_rect, upgrade_rect,
                 language_rect, settings_rect, result_rect, hero_arrow_rect)
 from highscores import add_highscore
 from settings_manager import SettingsManager
+from display_manager import DisplayManager
+from preferences import TABS
+from ui import NUMBER_KEYS, settings_tab_rect
 from translations import t
 from heroes import HEROES, HERO_KEYS
 from achievements import AchievementManager
@@ -27,19 +29,23 @@ from achievements import AchievementManager
 
 
 class Game:
-    def __init__(self):
+    def __init__(self, world_seed=None):
+        self.world_seed = world_seed
         pygame.init()
         pygame.display.set_caption(TITLE)
-        self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+        self.screen = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
         self.clock = pygame.time.Clock()
         self.running = True
 
         # Менеджер настроек и достижений
         self.settings_manager = SettingsManager()
+        self.display = DisplayManager(self.settings_manager)
         self.achievement_manager = AchievementManager()
 
         # UI
         self.ui = UI()
+        self.ui.settings = self.settings_manager
+        self.ui.mouse_pos = self.display.mouse_pos
 
         # Состояние игры
         if self.settings_manager.get("first_launch", True):
@@ -52,6 +58,7 @@ class Game:
         self.surrendered = False
         self.lang_selection = 0
         self.menu_selection = 0
+        self.settings_tab = 0
         self.settings_selection = 0
         self.settings_previous_state = "menu"
         self.pause_selection = 0
@@ -88,10 +95,12 @@ class Game:
     # ================================================================
     def run(self):
         while self.running:
-            dt = self.clock.tick(FPS) / 1000.0
+            dt = self.clock.tick(self.settings_manager.get("fps_limit", FPS)) / 1000.0
             dt = min(dt, 0.05)  # защита от скачков
 
-            events = pygame.event.get()
+            previous_state = self.state
+            previous_frame = self.screen.copy()
+            events = self.prepare_events(pygame.event.get())
             for event in events:
                 if event.type == pygame.QUIT:
                     self.running = False
@@ -134,10 +143,57 @@ class Game:
                 self.update_game_over(events)
                 self.draw_game_over()
 
-            pygame.display.flip()
+            if self.state != previous_state and (self.state == "menu" or previous_state == "menu"):
+                self.ui.begin_transition(previous_frame)
+            if self.settings_manager.get("menu_animations"):
+                self.ui.draw_transition(self.screen)
+            self.present()
 
         pygame.quit()
         sys.exit()
+
+    def prepare_events(self, events):
+        for event in events:
+            focus_lost = event.type == pygame.WINDOWFOCUSLOST or (
+                event.type == pygame.ACTIVEEVENT and getattr(event, 'gain', 1) == 0
+                and getattr(event, 'state', 0) & 2)
+            if focus_lost and self.state == 'playing' and self.settings_manager.get('pause_unfocused'):
+                self.state = 'paused'
+        return self.display.events(events)
+
+    def present(self):
+        if self.settings_manager.get('show_fps'):
+            text = self.ui.mono.render(f"{self.clock.get_fps():.0f} FPS", True, (109, 249, 197))
+            rect = text.get_rect(midtop=(SCREEN_WIDTH//2, 76))
+            pygame.draw.rect(self.screen, (12, 18, 29), rect.inflate(16, 6), border_radius=4)
+            self.screen.blit(text, rect)
+        self.display.present(self.screen)
+
+    def apply_runtime_settings(self):
+        cfg = self.settings_manager
+        if self.camera:
+            self.camera.culling_enabled = cfg.get("view_culling")
+            self.camera.shake_enabled = cfg.get('screen_shake')
+            if not self.camera.shake_enabled:
+                self.camera.shake_timer = 0
+                self.camera.shake_offset_x = self.camera.shake_offset_y = 0
+            self.camera.lerp_speed = cfg.get('camera_smoothing')
+            self.camera.look_ahead_distance = cfg.get('camera_lookahead')
+        if self.particle_manager:
+            pm = self.particle_manager
+            pm.damage_numbers_enabled = cfg.get('damage_numbers')
+            pm.density = cfg.get('particle_density')
+            pm.budget = cfg.get('particle_budget')
+            pm.notifications_enabled = cfg.get('notifications')
+            pm.message_duration = cfg.get('notification_duration')
+            pm.culling_enabled = cfg.get('view_culling')
+            if not pm.damage_numbers_enabled:
+                pm.damage_numbers.clear()
+            if not pm.notifications_enabled:
+                pm.messages.clear()
+            if pm.density == 0:
+                pm.particles.clear()
+            del pm.particles[pm.budget:]
 
     # ================================================================
     # ИНИЦИАЛИЗАЦИЯ НОВОЙ ИГРЫ
@@ -149,7 +205,7 @@ class Game:
         self.player = Player(0, 0, hero_id=hero_id)
         self.camera = Camera(SCREEN_WIDTH, SCREEN_HEIGHT)
         self.camera.shake_enabled = self.settings_manager.get("screen_shake", True)
-        self.world = World()
+        self.world = World(seed=self.world_seed)
         self.biome_key = None
         self.ice_trail = IceTrail()
         self.pulse_auras = PulseAuras()
@@ -161,7 +217,7 @@ class Game:
         self.spawner = EnemySpawner(self.world)
         self.upgrade_manager = UpgradeManager()
         self.particle_manager = ParticleManager()
-        self.particle_manager.damage_numbers_enabled = self.settings_manager.get("damage_numbers", True)
+        self.apply_runtime_settings()
         self.game_time = 0.0
         self.game_messages = []
         self.active_bosses = []
@@ -278,45 +334,48 @@ class Game:
     # ЭКРАН НАСТРОЕК
     # ================================================================
     def update_settings(self, events):
-        rects = [settings_rect(i) for i in range(5)]
-        for hovered, key in menu_inputs(events, rects):
-            if hovered is not None:
-                self.settings_selection = hovered
-            if key is None:
+        for event in events:
+            if event.type == pygame.KEYDOWN and event.key in NUMBER_KEYS:
+                index = NUMBER_KEYS[event.key]
+                if index < len(TABS):
+                    self.settings_tab, self.settings_selection = index, 0
                 continue
-            if key == pygame.K_ESCAPE:
-                self.settings_manager.save()
-                self.state = self.settings_previous_state
-                return
-            elif key in (pygame.K_UP, pygame.K_w):
-                self.settings_selection = (self.settings_selection - 1) % 5
-            elif key in (pygame.K_DOWN, pygame.K_s):
-                self.settings_selection = (self.settings_selection + 1) % 5
-            elif key in (pygame.K_LEFT, pygame.K_RIGHT, pygame.K_RETURN, pygame.K_a, pygame.K_d, pygame.K_SPACE):
-                if self.settings_selection == 0:
-                    cur_lang = self.settings_manager.get("language", "ru")
-                    new_lang = "en" if cur_lang == "ru" else "ru"
-                    self.settings_manager.set("language", new_lang)
-                elif self.settings_selection == 1:
-                    cur = self.settings_manager.get("screen_shake", True)
-                    self.settings_manager.set("screen_shake", not cur)
-                    if self.camera:
-                        self.camera.shake_enabled = not cur
-                elif self.settings_selection == 2:
-                    cur = self.settings_manager.get("damage_numbers", True)
-                    self.settings_manager.set("damage_numbers", not cur)
-                    if self.particle_manager:
-                        self.particle_manager.damage_numbers_enabled = not cur
-                elif self.settings_selection == 3:
-                    cur = self.settings_manager.get("minimap", True)
-                    self.settings_manager.set("minimap", not cur)
-                elif self.settings_selection == 4:
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_TAB:
+                self.settings_tab = (self.settings_tab + (-1 if getattr(event, 'mod', 0) & pygame.KMOD_SHIFT else 1)) % len(TABS)
+                self.settings_selection = 0
+                continue
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                tab = next((i for i in range(len(TABS)) if settings_tab_rect(i).collidepoint(event.pos)), None)
+                if tab is not None:
+                    self.settings_tab, self.settings_selection = tab, 0
+                    continue
+            rows = TABS[self.settings_tab][1]
+            for hovered, key in menu_inputs([event], [settings_rect(i) for i in range(len(rows))]):
+                if hovered is not None:
+                    self.settings_selection = hovered
+                if key == pygame.K_ESCAPE:
                     self.settings_manager.save()
                     self.state = self.settings_previous_state
                     return
+                if key in (pygame.K_UP, pygame.K_w):
+                    self.settings_selection = (self.settings_selection-1) % len(rows)
+                elif key in (pygame.K_DOWN, pygame.K_s):
+                    self.settings_selection = (self.settings_selection+1) % len(rows)
+                elif key in (pygame.K_LEFT, pygame.K_RIGHT, pygame.K_RETURN, pygame.K_SPACE, pygame.K_a, pygame.K_d):
+                    name, choices = rows[self.settings_selection]
+                    current = self.settings_manager.get(name)
+                    index = choices.index(current) if current in choices else 0
+                    step = -1 if key in (pygame.K_LEFT, pygame.K_a) else 1
+                    self.settings_manager.set(name, choices[(index+step) % len(choices)])
+                    if name in ('fullscreen', 'resolution'):
+                        self.display.apply()
+                    self.apply_runtime_settings()
 
     def draw_settings(self):
-        self.ui.draw_settings_screen(self.screen, self.settings_selection, self.settings_manager)
+        self.ui.draw_settings_screen(self.screen, self.settings_selection, self.settings_manager, self.settings_tab)
+        if self.display.error:
+            text = self.ui.body.render(t('DISPLAY_FALLBACK'), True, (255, 170, 100))
+            self.screen.blit(text, text.get_rect(center=(SCREEN_WIDTH//2, 645)))
 
     # ================================================================
     # ЭКРАН УПРАВЛЕНИЯ
@@ -481,7 +540,7 @@ class Game:
 
         # Ввод
         keys = pygame.key.get_pressed()
-        mouse_pos = pygame.mouse.get_pos()
+        mouse_pos = self.display.mouse_pos()
 
         # Обновить игрока
         move_start = self.player.x, self.player.y
@@ -513,19 +572,20 @@ class Game:
                     self.player.slide_angle, speed_ratio
                 )
                 # Частицы скольжения
-                self.particle_manager.spawn_slide_particles(
-                    self.player.x, self.player.y,
-                    self.player.slide_direction_x,
-                    self.player.slide_direction_y
-                )
+                if self.settings_manager.get("slide_particles"):
+                    self.particle_manager.spawn_slide_particles(
+                        self.player.x, self.player.y,
+                        self.player.slide_direction_x,
+                        self.player.slide_direction_y
+                    )
 
         # Обновить мир (следы, декорации)
         self.world.update(dt)
         biome = self.world.biome_at(self.player.x, self.player.y)
         if biome.key != self.biome_key:
             self.biome_key = biome.key
-            resident_name = t('MOB_' + RESIDENT_BY_BIOME[biome.key])
-            self.particle_manager.add_message(t('HABITAT_ENTRY', t('BIOME_' + biome.key), resident_name), CYAN)
+            if self.settings_manager.get("biome_notifications"):
+                self.particle_manager.add_message(t("BIOME_" + biome.key), CYAN)
 
         # Спавн врагов
         self.game_messages.clear()
@@ -838,7 +898,7 @@ class Game:
                 # Звёздочки стана
                 for i in range(4):
                     angle = i * math.pi / 2
-                    self.particle_manager.particles.append(
+                    self.particle_manager.emit(
                         Particle(
                             enemy.x, enemy.y - 10,
                             math.cos(angle) * 40,
@@ -1055,7 +1115,7 @@ class Game:
                 random.uniform(0.3, 0.8),
                 random.randint(3, 7)
             )
-            self.particle_manager.particles.append(particle)
+            self.particle_manager.emit(particle)
 
         # Обработать каждого врага в радиусе
         for enemy in self.enemies:
@@ -1336,7 +1396,7 @@ class Game:
                             enemy.x, enemy.y, CYAN, count=3
                         )
                         # Маленькая молния-частица
-                        self.particle_manager.particles.append(
+                        self.particle_manager.emit(
                             Particle(
                                 enemy.x, enemy.y,
                                 random.uniform(-80, 80),
@@ -1684,12 +1744,19 @@ class Game:
     # ================================================================
     # ОТРИСОВКА ИГРЫ
     # ================================================================
+    def visible(self, obj):
+        if not self.settings_manager.get('view_culling'):
+            return True
+        x, y = self.camera.apply(obj.x, obj.y)
+        margin = max(160, getattr(obj, 'size', 0)*4)
+        return -margin <= x <= SCREEN_WIDTH+margin and -margin <= y <= SCREEN_HEIGHT+margin
+
     def draw_playing(self):
         """Нарисовать весь игровой мир"""
         self.screen.fill(BLACK)
 
         # Мир (фон, тайлы, декорации, следы)
-        self.world.draw(self.screen, self.camera, self.game_time)
+        self.world.draw(self.screen, self.camera, self.game_time, self.settings_manager)
 
         # Корпусы (крестики на земле)
         self.draw_corpses()
@@ -1706,11 +1773,13 @@ class Game:
 
         # XP сферы
         for orb in self.xp_orbs:
-            orb.draw(self.screen, self.camera)
+            if self.visible(orb):
+                orb.draw(self.screen, self.camera)
 
         # Предметы
         for item in self.dropped_items:
-            item.draw(self.screen, self.camera)
+            if self.visible(item):
+                item.draw(self.screen, self.camera)
 
         # Стан-эффект над врагами (под спрайтами врагов)
         for enemy in self.enemies:
@@ -1727,12 +1796,15 @@ class Game:
 
         # Враги
         for enemy in self.enemies:
-            enemy.draw(self.screen, self.camera)
+            if self.visible(enemy):
+                enemy.draw(self.screen, self.camera)
 
         # Снаряды врагов
         for proj in self.enemy_projectiles:
-            proj.draw(self.screen, self.camera)
+            if self.visible(proj):
+                proj.draw(self.screen, self.camera)
 
+        # Render-only culling: entities continue updating off-screen.
         # Игрок
         self.player.draw(self.screen, self.camera)
 
@@ -1741,6 +1813,12 @@ class Game:
             self.screen, self.camera,
             self.ui.font_small, self.ui.font
         )
+
+        if self.settings_manager.get('crosshair'):
+            x, y = self.display.mouse_pos()
+            pygame.draw.circle(self.screen, WHITE, (x, y), 7, 1)
+            pygame.draw.line(self.screen, CYAN, (x-11, y), (x-4, y), 1)
+            pygame.draw.line(self.screen, CYAN, (x+4, y), (x+11, y), 1)
 
         # HUD
         active_boss = self.active_bosses[0] if self.active_bosses else None
@@ -1756,11 +1834,12 @@ class Game:
             self.ui.draw_minimap(
                 self.screen, self.player,
                 self.enemies, self.xp_orbs,
-                self.dropped_items, bosses_alive
+                self.dropped_items, bosses_alive, self.world, self.game_time
             )
 
         # Вспышка экрана (поверх всего)
-        self.camera.draw_flash(self.screen)
+        if self.settings_manager.get("screen_flashes"):
+            self.camera.draw_flash(self.screen)
 
     def draw_stun_effect(self, enemy):
         """Крутящиеся звёздочки над оглушённым врагом"""
@@ -1864,5 +1943,8 @@ class Game:
 # ТОЧКА ВХОДА
 # ================================================================
 if __name__ == "__main__":
-    game = Game()
+    import argparse
+    parser = argparse.ArgumentParser(description=TITLE)
+    parser.add_argument('--seed', type=int, help='Reproduce world terrain with this seed')
+    game = Game(world_seed=parser.parse_args().seed)
     game.run()

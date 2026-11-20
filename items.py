@@ -72,7 +72,7 @@ class XPOrb:
         sx, sy = camera.apply(self.x, self.y)
         sx, sy = int(sx), int(sy)
 
-        if sx < -20 or sx > SCREEN_WIDTH + 20 or sy < -20 or sy > SCREEN_HEIGHT + 20:
+        if getattr(camera, "culling_enabled", True) and (sx < -20 or sx > SCREEN_WIDTH + 20 or sy < -20 or sy > SCREEN_HEIGHT + 20):
             return
 
         # Пульсация
@@ -141,7 +141,7 @@ class DroppedItem:
         sx, sy = camera.apply(self.x, self.y)
         sx, sy = int(sx), int(sy)
 
-        if sx < -20 or sx > SCREEN_WIDTH + 20 or sy < -20 or sy > SCREEN_HEIGHT + 20:
+        if getattr(camera, "culling_enabled", True) and (sx < -20 or sx > SCREEN_WIDTH + 20 or sy < -20 or sy > SCREEN_HEIGHT + 20):
             return
 
         # Мигание перед исчезновением

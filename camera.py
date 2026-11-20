@@ -67,7 +67,7 @@ class Camera:
             self.initialized = True
         else:
             # Плавная интерполяция (lerp)
-            lerp_factor = min(1.0, self.lerp_speed * dt) if dt > 0 else 1.0
+            lerp_factor = min(1.0, self.lerp_speed * dt) if dt > 0 and self.lerp_speed > 0 else 1.0
             self.smooth_x += (goal_x - self.smooth_x) * lerp_factor
             self.smooth_y += (goal_y - self.smooth_y) * lerp_factor
 

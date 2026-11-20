@@ -9,6 +9,7 @@ from heroes import HEROES, HERO_KEYS
 from achievements import ACHIEVEMENTS_LIST
 from typography import TextFont
 from consumables import tonic_icon
+from preferences import TABS, DEFAULTS
 
 INK = (12, 18, 29)
 PANEL = (23, 34, 50)
@@ -41,7 +42,11 @@ def language_rect(i):
 
 
 def settings_rect(i):
-    return pygame.Rect(320, 185 + 65*i, 640, 54)
+    return pygame.Rect(70, 177 + 53*i, 1140, 47)
+
+
+def settings_tab_rect(i):
+    return pygame.Rect(70+i*287, 102, 279, 48)
 
 
 def result_rect(i):
@@ -101,6 +106,36 @@ class UI:
         self.font_combo = TextFont('display', 36)
         self.mono = TextFont('mono', 16)
         self.body = TextFont('body', 19)
+
+    def setting(self, key):
+        settings = getattr(self, 'settings', None)
+        return settings.get(key, DEFAULTS.get(key)) if settings else DEFAULTS.get(key)
+
+    def fitted_text(self, text, color, width, height, max_size=14):
+        # Measure rendered glyphs, not the nominal point size (Cyrillic/descenders).
+        for px in range(max_size, 5, -1):
+            result = TextFont('label', px).render(text, True, color)
+            bounds = result.get_bounding_rect()
+            if bounds.w and bounds.h:
+                result = result.subsurface(bounds).copy()
+            if result.get_width() <= width and result.get_height() <= height:
+                return result
+        return pygame.transform.smoothscale(result, (min(width, result.get_width()), min(height, result.get_height())))
+
+    def begin_transition(self, frame):
+        self.transition_frame = frame
+        self.transition_started = pygame.time.get_ticks()
+
+    def draw_transition(self, screen):
+        frame = getattr(self, 'transition_frame', None)
+        if frame is None:
+            return
+        progress = min(1, (pygame.time.get_ticks()-self.transition_started)/280)
+        if progress >= 1:
+            self.transition_frame = None
+            return
+        frame.set_alpha(round(255*(1-progress)**3))
+        screen.blit(frame, (0, round(-16*progress)))
 
     def button(self, screen, rect, label, index, selected):
         fg = INK if selected else PAPER
@@ -251,11 +286,11 @@ class UI:
 
         if player.can_use_ult():
             t_str = t("ULT_READY", ult_name)
-            text_s = self.font_small.render(t_str, True, GOLD)
+            text_s = self.fitted_text(t_str, GOLD, 230, 17, 14)
             screen.blit(text_s, (bar_x, bar_y + 20))
         else:
             pct_str = f"{ult_name}: {int(player.ult_charge)}%"
-            text_s = self.font_small.render(pct_str, True, LIGHT_GRAY)
+            text_s = self.fitted_text(pct_str, LIGHT_GRAY, bar_w-8, bar_h-4, 13)
             text_r = text_s.get_rect(center=bg_rect.center)
             screen.blit(text_s, text_r)
 
@@ -341,24 +376,25 @@ class UI:
             screen.blit(surface, rect)
 
     def draw_stats_mini(self, screen, player, enemy_count):
-        x = SCREEN_WIDTH - 160
-        y = UI_MARGIN
-
-        lines = [
-            t("STAT_KILLS", player.enemies_killed),
-            t("STAT_ENEMIES", enemy_count),
-            t("STAT_SPEED", int(player.current_speed)),
-            t("STAT_MAX_COMBO", player.combo_max_reached),
-        ]
-
-        for i, line in enumerate(lines):
-            text_surface = self.font_small.render(line, True, LIGHT_GRAY)
-            screen.blit(text_surface, (x, y + i * 20))
+        if not self.setting('hud_stats'):
+            return
+        x, y = SCREEN_WIDTH-274, UI_MARGIN
+        stats = [('KILLS', player.enemies_killed, MINT), ('ENEMIES', enemy_count, (255, 145, 123)),
+                 ('SPEED', int(player.current_speed), CYAN), ('COMBO', player.combo_max_reached, GOLD)]
+        for i, (label, value, accent) in enumerate(stats):
+            rect = pygame.Rect(x+(i%2)*132, y+(i//2)*51, 126, 45)
+            pygame.draw.rect(screen, INK, rect, border_radius=7)
+            pygame.draw.rect(screen, EDGE, rect, 1, border_radius=7)
+            pygame.draw.rect(screen, accent, (rect.x+9, rect.y+10, 2, 25), border_radius=1)
+            label_s = TextFont('label', 11).render(t('HUD_'+label), True, MUTED)
+            screen.blit(label_s, (rect.x+19, rect.y+5))
+            value_s = self.fitted_text(str(value), accent, 98, 22, 20)
+            screen.blit(value_s, (rect.x+19, rect.y+20))
 
     # ================================================================
     # МИНИ-КАРТА
     # ================================================================
-    def draw_minimap(self, screen, player, enemies, xp_orbs, dropped_items, bosses_alive):
+    def draw_minimap(self, screen, player, enemies, xp_orbs, dropped_items, bosses_alive, world=None, game_time=0):
         mm_size = MINIMAP_SIZE
         mm_x = SCREEN_WIDTH - mm_size - MINIMAP_MARGIN
         mm_y = SCREEN_HEIGHT - mm_size - MINIMAP_MARGIN - UI_XP_BAR_HEIGHT - 5
@@ -370,6 +406,26 @@ class UI:
         # Тёмный прозрачный круговой фон
         pygame.draw.circle(mm_surface, (12, 16, 32, 210), (center, center), radius)
 
+        if world is not None and self.setting('minimap_biomes'):
+            # Quantise the map origin; rebuild at most five times per second.
+            origin = (round(player.x/64)*64, round(player.y/64)*64)
+            cache_key = (id(world), origin)
+            if (getattr(self, '_map_key', None) != cache_key and
+                    pygame.time.get_ticks() >= getattr(self, '_map_next', 0)):
+                terrain = pygame.Surface((mm_size, mm_size), pygame.SRCALPHA)
+                for my in range(0, mm_size, 6):
+                    for mx in range(0, mm_size, 6):
+                        if (mx+3-center)**2 + (my+3-center)**2 < (radius-4)**2:
+                            color = world.ground_color_at(origin[0]+(mx+3-center)/MINIMAP_SCALE,
+                                                          origin[1]+(my+3-center)/MINIMAP_SCALE)
+                            pygame.draw.rect(terrain, color, (mx, my, 6, 6))
+                self._map_terrain, self._map_key = terrain, cache_key
+                self._map_next = pygame.time.get_ticks()+200
+            if getattr(self, '_map_key', (None,))[0] == id(world):
+                mm_surface.blit(self._map_terrain, (0, 0))
+            label = self.font_small.render(t('BIOME_'+world.biome_at(player.x, player.y).key), True, PAPER)
+            screen.blit(label, label.get_rect(midbottom=(mm_x+center, mm_y-4)))
+
         # Радарная сетка (концентрические круги)
         pygame.draw.circle(mm_surface, (0, 220, 255, 45), (center, center), int(radius * 0.66), 1)
         pygame.draw.circle(mm_surface, (0, 220, 255, 25), (center, center), int(radius * 0.33), 1)
@@ -379,11 +435,12 @@ class UI:
         pygame.draw.line(mm_surface, (0, 220, 255, 40), (6, center), (mm_size - 6, center), 1)
 
         # Вращающийся луч радара
-        t_time = pygame.time.get_ticks() / 1000.0
+        t_time = game_time
         sweep_angle = (t_time * 2.2) % (math.pi * 2)
         end_x = center + int(math.cos(sweep_angle) * radius)
         end_y = center + int(math.sin(sweep_angle) * radius)
-        pygame.draw.line(mm_surface, (0, 255, 220, 70), (center, center), (end_x, end_y), 2)
+        if self.setting("radar_sweep"):
+            pygame.draw.line(mm_surface, (0, 255, 220, 70), (center, center), (end_x, end_y), 2)
 
         # Опыт (XP gems)
         for orb in xp_orbs:
@@ -499,9 +556,11 @@ class UI:
     # ВЫБОР ПЕРСОНАЖА
     # ================================================================
     def draw_hero_select_screen(self, screen, selected_index):
-        screen.fill((15, 15, 30))
-
-        title = self.font_large.render(t("HERO_SELECT_TITLE"), True, CYAN)
+        screen.fill(INK)
+        for x in range(-200, SCREEN_WIDTH, 80):
+            pygame.draw.line(screen, (22, 32, 46), (x, SCREEN_HEIGHT), (x+300, 0))
+        screen.blit(self.mono.render('SS / '+t('ROSTER'), True, MINT), (70, 34))
+        title = self.font_large.render(t("HERO_SELECT_TITLE"), True, PAPER)
         title_rect = title.get_rect(center=(SCREEN_WIDTH // 2, 50))
         screen.blit(title, title_rect)
 
@@ -515,12 +574,20 @@ class UI:
 
             screen.blit(self.mono.render(f"0{i+1}", True, MUTED), (bx+15, by+10))
 
+            accent = h_data['color']
+            pygame.draw.rect(screen, accent if i == selected_index else EDGE,
+                             (bx+18, by+box_w//2+32, box_w-36, 2))
+            if i == selected_index:
+                pulse = 49 + int(3*math.sin(pygame.time.get_ticks()/350))
+                pygame.draw.circle(screen, accent, (bx+box_w//2, by+60), pulse, 1)
             # Круг персонажа
             cx = bx + box_w // 2
             cy = by + 60
             pygame.draw.circle(screen, h_data["color"], (cx, cy), 35)
             pygame.draw.circle(screen, h_data["outline_color"], (cx, cy), 35, 3)
 
+            pygame.draw.line(screen, INK, (cx+3,cy-9), (cx+24,cy-12), 5)
+            pygame.draw.circle(screen, accent, (cx+29,cy+22), 10)
             # Название и подзаголовок
             name_s = self.font.render(t(f"hero_{key}_name"), True, WHITE)
             name_r = name_s.get_rect(center=(cx, by + 120))
@@ -540,6 +607,20 @@ class UI:
                     screen.blit(p_s, p_s.get_rect(center=(cx, y_offset)))
                     y_offset += 23
 
+            for j, (label, value, maximum) in enumerate((
+                    ('HERO_HP', h_data['base_hp'], 150),
+                    ('HERO_SPEED', h_data['base_speed'], 260),
+                    ('HERO_POWER', h_data['fist_damage_mult']*100, 150))):
+                y = by+259+j*29
+                screen.blit(self.font_small.render(t(label), True, MUTED), (bx+18, y))
+                number = self.font_small.render(str(round(value)), True, PAPER)
+                screen.blit(number, number.get_rect(topright=(rect.right-18, y)))
+                pygame.draw.rect(screen, EDGE, (bx+18, y+21, box_w-36, 3), border_radius=1)
+                pygame.draw.rect(screen, accent, (bx+18, y+21, round((box_w-36)*value/maximum), 3), border_radius=1)
+
+        key = HERO_KEYS[selected_index]
+        ultimate = self.body.render(t('ULT_LABEL')+' / '+t(HEROES[key]['ult_id']+'_name'), True, HEROES[key]['color'])
+        screen.blit(ultimate, ultimate.get_rect(center=(SCREEN_WIDTH//2, 601)))
         hint = self.font_small.render(t("HERO_SELECT_HINT"), True, GRAY)
         hint_rect = hint.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 40))
         screen.blit(hint, hint_rect)
@@ -566,32 +647,41 @@ class UI:
     # ================================================================
     # НАСТРОЙКИ
     # ================================================================
-    def draw_settings_screen(self, screen, selected_option, settings_manager):
-        screen.fill((15, 15, 30))
-
-        title = self.font_large.render(t("SETTINGS_TITLE"), True, CYAN)
-        title_rect = title.get_rect(center=(SCREEN_WIDTH // 2, 100))
-        screen.blit(title, title_rect)
-
-        lang_val = t("LANG_RU") if settings_manager.get("language") == "ru" else t("LANG_EN")
-        shake_val = t("SETTING_ON") if settings_manager.get("screen_shake", True) else t("SETTING_OFF")
-        dmg_val = t("SETTING_ON") if settings_manager.get("damage_numbers", True) else t("SETTING_OFF")
-        mm_val = t("SETTING_ON") if settings_manager.get("minimap", True) else t("SETTING_OFF")
-
-        options = [
-            f"{t('SETTING_LANG')}: < {lang_val} >",
-            f"{t('SETTING_SHAKE')}: < {shake_val} >",
-            f"{t('SETTING_DAMAGE_NUMS')}: < {dmg_val} >",
-            f"{t('SETTING_MINIMAP')}: < {mm_val} >",
-            t("SETTING_BACK"),
-        ]
-
-        for i, opt in enumerate(options):
-            self.button(screen, settings_rect(i), opt, i, i == selected_option)
-
-        hint = self.font_small.render(t("SETTINGS_HINT"), True, GRAY)
-        hint_rect = hint.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 50))
-        screen.blit(hint, hint_rect)
+    def draw_settings_screen(self, screen, selected_option, settings_manager, tab=0):
+        screen.fill(INK)
+        screen.blit(self.mono.render('SS / '+t('SETTINGS_TITLE'), True, MINT), (70, 35))
+        pygame.draw.line(screen, EDGE, (70, 76), (1210, 76))
+        for i, (name, _) in enumerate(TABS):
+            self.button(screen, settings_tab_rect(i), t('TAB_'+name), i, i == tab)
+        for i, (key, choices) in enumerate(TABS[tab][1]):
+            rect = settings_rect(i)
+            selected = i == selected_option
+            pygame.draw.rect(screen, PANEL if selected else (17, 25, 38), rect, border_radius=6)
+            pygame.draw.rect(screen, MINT if selected else EDGE, rect, 1, border_radius=6)
+            if selected:
+                pygame.draw.rect(screen, MINT, (rect.x, rect.y+9, 3, rect.h-18), border_radius=1)
+            screen.blit(self.body.render(t('OPT_'+key), True, PAPER), (rect.x+20, rect.y+12))
+            value = settings_manager.get(key)
+            if type(value) is bool:
+                text = t('SETTING_ON' if value else 'SETTING_OFF')
+            elif key == 'resolution':
+                text = f'{value[0]} × {value[1]}'
+            elif key == 'language':
+                text = t('LANG_RU' if value == 'ru' else 'LANG_EN')
+            elif key == 'fps_limit' and value == 0:
+                text = t('UNLIMITED')
+            elif key == 'camera_smoothing' and value == 0:
+                text = t('SETTING_OFF')
+            elif key == 'particle_density':
+                text = f'{value:g}×'
+            else:
+                text = str(value)
+            label = self.body.render('‹  '+text+'  ›', True, MINT if selected else MUTED)
+            screen.blit(label, label.get_rect(midright=(rect.right-20, rect.centery)))
+        hint = self.body.render(t('SETTINGS_TABS_HINT'), True, MUTED)
+        screen.blit(hint, (70, 674))
+        note = self.font_small.render(t('SETTINGS_NOTE'), True, MUTED)
+        screen.blit(note, (70, 620))
 
     # ================================================================
     # ДОСТИЖЕНИЯ
@@ -664,12 +754,20 @@ class UI:
         screen.blit(serial, serial.get_rect(topright=(card.right-28, 225)))
         for step in (-1, 1):
             button = hero_arrow_rect(step)
-            hot = button.collidepoint(pygame.mouse.get_pos())
+            hot = button.collidepoint(getattr(self, "mouse_pos", pygame.mouse.get_pos)())
             pygame.draw.rect(screen, INK, button, border_radius=8)
             pygame.draw.rect(screen, accent if hot else EDGE, button, 2, border_radius=8)
             ax, ay = button.center
             pygame.draw.lines(screen, accent if hot else PAPER, False,
                               [(ax-step*4, ay-9), (ax+step*5, ay), (ax-step*4, ay+9)], 3)
+        hero_before = screen.copy()
+        now = pygame.time.get_ticks()
+        if getattr(self, '_lobby_hero', selected_hero_index) != selected_hero_index:
+            delta = (selected_hero_index - self._lobby_hero) % len(HERO_KEYS)
+            self._hero_direction = 1 if delta == 1 else -1
+            self._hero_started = now
+            self._hero_old = getattr(self, '_hero_card', None)
+        self._lobby_hero = selected_hero_index
         # Hero emblem with a contrail, orbit ticks and the fighter's own colours.
         cx, cy = card.centerx, 329
         for j in range(3):
@@ -690,6 +788,24 @@ class UI:
         pygame.draw.line(screen, EDGE, (x, 484), (card.right-28, 484))
         screen.blit(self.mono.render(t('ULT_LABEL'), True, MUTED), (x, 509))
         screen.blit(self.font.render('⚡ ' + t(hero['ult_id']+'_name'), True, accent), (x, 538))
+        content_rect = pygame.Rect(card.x+88, 260, card.w-176, 220)
+        current = screen.subsurface(content_rect).copy()
+        progress = min(1, (now-getattr(self, '_hero_started', -1000))/260)
+        if progress < 1 and self.setting("menu_animations"):
+            screen.blit(hero_before, content_rect, content_rect)
+            eased = 1-(1-progress)**3
+            old = getattr(self, '_hero_old', None)
+            direction = getattr(self, '_hero_direction', 1)
+            clip = screen.get_clip()
+            screen.set_clip(content_rect)
+            if old is not None:
+                old.set_alpha(round(255*(1-eased)))
+                screen.blit(old, (content_rect.x-round(direction*90*eased), content_rect.y))
+            current.set_alpha(round(255*eased))
+            screen.blit(current, (content_rect.x+round(direction*90*(1-eased)), content_rect.y))
+            screen.set_clip(clip)
+        current.set_alpha(255)
+        self._hero_card = current
         pygame.draw.line(screen, EDGE, (70, 646), (1210, 646))
         screen.blit(self.body.render(t('MENU_HINT'), True, MUTED), (70, 661))
 

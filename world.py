@@ -3,6 +3,7 @@
 import pygame
 import random
 import math
+from functools import lru_cache
 from settings import *
 from biomes import BIOMES, prop_sprite
 
@@ -23,7 +24,7 @@ class Decoration:
         sx, sy = camera.apply(self.x, self.y)
         sx, sy = int(sx), int(sy)
 
-        if sx < -30 or sx > SCREEN_WIDTH + 30 or sy < -30 or sy > SCREEN_HEIGHT + 30:
+        if getattr(camera, "culling_enabled", True) and (sx < -30 or sx > SCREEN_WIDTH + 30 or sy < -30 or sy > SCREEN_HEIGHT + 30):
             return
 
         if self.sprite is not None:
@@ -106,7 +107,7 @@ class SlideTrail:
         sx, sy = camera.apply(self.x, self.y)
         sx, sy = int(sx), int(sy)
 
-        if sx < -20 or sx > SCREEN_WIDTH + 20 or sy < -20 or sy > SCREEN_HEIGHT + 20:
+        if getattr(camera, "culling_enabled", True) and (sx < -20 or sx > SCREEN_WIDTH + 20 or sy < -20 or sy > SCREEN_HEIGHT + 20):
             return
 
         alpha_ratio = self.lifetime / self.max_lifetime
@@ -129,16 +130,10 @@ class World:
         self.seed = random.randrange(2**31) if seed is None else seed
         self.biomes = list(BIOMES)
         random.Random(self.seed).shuffle(self.biomes)
-        self.tiles = {}
-        for biome in self.biomes:
-            pair = []
-            for shade in (0, 4):
-                color = tuple(c + shade for c in biome.ground)
-                tile = pygame.Surface((TILE_SIZE, TILE_SIZE))
-                tile.fill(color)
-                self._add_tile_details(tile, color)
-                pair.append(tile)
-            self.tiles[biome.key] = pair
+        # Instance-local bounded caches do not retain worlds from previous runs.
+        self._site = lru_cache(maxsize=1024)(self._site)
+        self.ground_color_at = lru_cache(maxsize=8192)(self.ground_color_at)
+        self.terrain_tile = lru_cache(maxsize=384)(self.terrain_tile)
 
         # Кэш декораций по чанкам
         self.decoration_cache = {}
@@ -147,40 +142,73 @@ class World:
         # Следы скольжения
         self.slide_trails = []
 
-    def _add_tile_details(self, surface, base_color):
-        rng = random.Random(hash(base_color))
-        for _ in range(5):
-            x = rng.randint(2, TILE_SIZE - 2)
-            y = rng.randint(2, TILE_SIZE - 2)
-            detail_color = (
-                min(255, base_color[0] + rng.randint(3, 12)),
-                min(255, base_color[1] + rng.randint(3, 12)),
-                min(255, base_color[2] + rng.randint(3, 12)),
-            )
-            for dx in range(-1, 2):
-                for dy in range(-1, 2):
-                    nx, ny = x + dx, y + dy
-                    if 0 <= nx < TILE_SIZE and 0 <= ny < TILE_SIZE:
-                        if rng.random() < 0.6:
-                            surface.set_at((nx, ny), detail_color)
+    def _random_at(self, x, y, salt=0):
+        # Stable integer mixer; independent of Python hash randomisation.
+        n = (x * 374761393 + y * 668265263 + self.seed * 1442695041 + salt * 1274126177) & 0xffffffff
+        n = ((n ^ (n >> 13)) * 1274126177) & 0xffffffff
+        return (n ^ (n >> 16)) / 4294967295
+
+    def _noise(self, x, y, scale, salt):
+        x, y = x / scale, y / scale
+        ix, iy = math.floor(x), math.floor(y)
+        u, v = x - ix, y - iy
+        u, v = u*u*u*(u*(u*6-15)+10), v*v*v*(v*(v*6-15)+10)
+        a, b = self._random_at(ix, iy, salt), self._random_at(ix+1, iy, salt)
+        c, d = self._random_at(ix, iy+1, salt), self._random_at(ix+1, iy+1, salt)
+        return (a+(b-a)*u)*(1-v) + (c+(d-c)*u)*v
+
+    def _site(self, cx, cy):
+        size = 1500
+        return ((cx + .15 + .7*self._random_at(cx, cy, 1))*size,
+                (cy + .15 + .7*self._random_at(cx, cy, 2))*size,
+                .75 + .5*self._random_at(cx, cy, 3),
+                self.biomes[min(9, int(self._random_at(cx, cy, 4)*10))])
+
+    def _regions(self, x, y):
+        # Low-frequency domain warp bends the cellular borders organically.
+        x, y = (x + 620*(self._noise(x, y, 1800, 5)-.5),
+                y + 620*(self._noise(x, y, 1800, 6)-.5))
+        cx, cy = math.floor(x/1500), math.floor(y/1500)
+        distances = {}
+        for yy in range(cy-2, cy+3):
+            for xx in range(cx-2, cx+3):
+                sx, sy, weight, biome = self._site(xx, yy)
+                distance = math.hypot(x-sx, y-sy)/weight
+                distances[biome] = min(distance, distances.get(biome, float('inf')))
+        return sorted(distances.items(), key=lambda pair: pair[1])
 
     def biome_for_chunk(self, cx, cy):
-        # Regions span three chunks per side. Any row visits all ten biomes.
-        rx, ry = (cx + 1) // 3, (cy + 1) // 3
-        return self.biomes[(rx + 3 * ry) % len(self.biomes)]
+        """Representative biome at the chunk centre (chunks may contain borders)."""
+        return self.biome_at((cx+.5)*self.chunk_size, (cy+.5)*self.chunk_size)
 
     def biome_at(self, x, y):
-        return self.biome_for_chunk(math.floor(x / self.chunk_size), math.floor(y / self.chunk_size))
+        return self._regions(x, y)[0][0]
+
+    def ground_color_at(self, x, y):
+        regions = self._regions(x, y)
+        nearest = regions[0][1]
+        weights = [(biome, max(0, 1-(dist-nearest)/340)**2) for biome, dist in regions]
+        total = sum(weight for _, weight in weights)
+        depth = 1 - .085*self._noise(x, y, 950, 7) - .025*self._noise(x, y, 310, 8)
+        return tuple(round(sum(b.ground[i]*w for b, w in weights)/total*depth) for i in range(3))
+
+    def terrain_tile(self, tx, ty):
+        # One shared sample lattice, including both edges: no tile seams.
+        small = pygame.Surface((5, 5))
+        for y in range(5):
+            for x in range(5):
+                small.set_at((x, y), self.ground_color_at((tx+x/4)*TILE_SIZE, (ty+y/4)*TILE_SIZE))
+        return pygame.transform.smoothscale(small, (TILE_SIZE, TILE_SIZE))
 
     def get_decorations_for_chunk(self, cx, cy):
         """Получить/сгенерировать декорации для чанка"""
         key = (cx, cy)
         if key not in self.decoration_cache:
             rng = random.Random(hash((self.seed, cx, cy)))
-            biome = self.biome_for_chunk(cx, cy)
             decos = []
             for _ in range(rng.randint(14, 22)):
                 dx, dy = rng.randrange(self.chunk_size), rng.randrange(self.chunk_size)
+                biome = self.biome_at(cx*self.chunk_size + dx, cy*self.chunk_size + dy)
                 kind = rng.choice(biome.props if rng.random() < 0.65 else biome.scatter)
                 decos.append(Decoration(cx*self.chunk_size + dx, cy*self.chunk_size + dy,
                                         kind, biome, rng))
@@ -208,7 +236,7 @@ class World:
         if len(self.slide_trails) > 500:
             self.slide_trails = self.slide_trails[-500:]
 
-    def draw(self, screen, camera, game_time=0):
+    def draw(self, screen, camera, game_time=0, settings=None):
         """Нарисовать мир"""
         # Тайлы
         start_x = int(camera.offset_x // TILE_SIZE) - 1
@@ -218,17 +246,19 @@ class World:
 
         for ty in range(start_y, end_y):
             for tx in range(start_x, end_x):
-                biome = self.biome_for_chunk(tx*TILE_SIZE // self.chunk_size, ty*TILE_SIZE // self.chunk_size)
-                tile = self.tiles[biome.key][(tx + ty) % 2]
+                tile = self.terrain_tile(tx, ty)
                 screen_x = tx * TILE_SIZE - camera.offset_x
                 screen_y = ty * TILE_SIZE - camera.offset_y
                 screen.blit(tile, (int(screen_x), int(screen_y)))
 
         # Следы скольжения
-        for trail in self.slide_trails:
-            trail.draw(screen, camera)
+        if settings is None or settings.get("slide_trails"):
+            for trail in self.slide_trails:
+                trail.draw(screen, camera)
 
         # Декорации
+        if settings is not None and not settings.get("decorations"):
+            return
         chunk_start_x = int((camera.offset_x - 100) // self.chunk_size)
         chunk_start_y = int((camera.offset_y - 100) // self.chunk_size)
         chunk_end_x = int((camera.offset_x + SCREEN_WIDTH + 100) // self.chunk_size)

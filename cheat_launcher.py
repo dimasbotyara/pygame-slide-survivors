@@ -1,4 +1,4 @@
-# cheat_launcher.py — v2 — Ultimate Trainer for Slide Survivors
+# cheat_launcher.py — v3 — Ultimate Trainer for Slide Survivors
 # Run this instead of main.py. Does NOT modify any source files.
 #
 #   python cheat_launcher.py
@@ -364,6 +364,8 @@ class Trainer:
 
         # ── cheat flags ──
         self.god_mode = False
+        self.infinite_ult = False
+        self.bookmark = None
         self.no_damage = False
         self.auto_heal = False
         self.one_hit_kill = False
@@ -401,9 +403,9 @@ class Trainer:
         # ── menu geometry ──
         self.panel_x = 16
         self.panel_y = 16
-        self.panel_w = 580
+        self.panel_w = 920
         self.row_h   = 28
-        self.header_h = 110
+        self.header_h = 152
 
         # ── build tabs ──
         self.tabs = self._build_tabs()
@@ -415,6 +417,7 @@ class Trainer:
     def _build_tabs(self):
         return [
             {"name": "PLAYER", "items": [
+                self._toggle("Infinite ultimate", "infinite_ult"),
                 self._toggle("God mode",            "god_mode"),
                 self._toggle("No damage",           "no_damage"),
                 self._toggle("Auto heal",           "auto_heal"),
@@ -439,6 +442,11 @@ class Trainer:
                 self._action("Clear projectiles",   self.act_clear_proj),
             ]},
             {"name": "WORLD", "items": [
+                self._action("Save position", self.act_save_position),
+                self._action("Return to saved position", self.act_return_position),
+                self._action("Log world seed / biome", self.act_world_info),
+                self._action("Spawn native resident", self.act_spawn_resident),
+                self._action("Reset modifiers (not stats)", self.act_reset_modifiers),
                 self._toggle("Freeze enemies",      "freeze_enemies"),
                 self._toggle("No enemy spawn",      "no_enemy_spawn"),
                 self._toggle("No boss arena",       "no_boss_arena"),
@@ -574,6 +582,51 @@ class Trainer:
             self._msg("Start a run first", RED)
         return p
 
+    def act_save_position(self):
+        p = self._need_player()
+        if p:
+            self.bookmark = (self.game.world, p.x, p.y)
+            self._msg("Position saved for this run")
+
+    def act_return_position(self):
+        p = self._need_player()
+        if p and self.bookmark and self.bookmark[0] is self.game.world:
+            p.x, p.y = self.bookmark[1:]
+            p.velocity_x = p.velocity_y = 0
+        else:
+            self._msg("Save a position in this run first", ORANGE)
+
+    def act_world_info(self):
+        p = self._need_player()
+        if p:
+            world = self.game.world
+            text = f"Seed: {world.seed} | {world.biome_at(p.x, p.y).key} | {p.x:.0f}, {p.y:.0f}"
+            self.console.log(text, CYAN)
+            self._msg(text)
+
+    def act_spawn_resident(self):
+        p = self._need_player()
+        if p:
+            from wildlife import RESIDENT_BY_BIOME
+            world = self.game.world
+            # Spawn inside the actual habitat rather than across a border.
+            x, y = p.x+70, p.y
+            kind = RESIDENT_BY_BIOME[world.biome_at(x, y).key]
+            self.game.enemies.append(_enemies_mod.Enemy(x, y, kind))
+            self._msg("Spawned " + kind)
+
+    def act_reset_modifiers(self):
+        for tab in self.tabs:
+            for item in tab['items']:
+                if item['type'] == 'toggle':
+                    setattr(self, item['attr'], item['attr'] == 'show_compact_hud')
+        for attr in ('damage_multiplier', 'move_speed_multiplier', 'attack_speed_multiplier', 'xp_multiplier', 'time_scale'):
+            setattr(self, attr, 1.0)
+        self._msg("Modifiers reset; edited stats and progress unchanged")
+
+    def _tab_rect(self, i):
+        return pygame.Rect(12+(i % 5)*179, 72+(i // 5)*32, 173, 27)
+
     def act_heal_full(self):
         p = self._need_player()
         if p:
@@ -585,7 +638,7 @@ class Trainer:
         cam = getattr(self.game, "camera", None)
         if not p or cam is None:
             return
-        mx, my = pygame.mouse.get_pos()
+        mx, my = self.game.display.mouse_pos()
         wx, wy = cam.reverse(mx, my)
         p.x, p.y = float(wx), float(wy)
         self._msg("Teleported", CYAN)
@@ -947,16 +1000,12 @@ class Trainer:
         mx, my = event.pos
         px, py = self.panel_x, self.panel_y
 
-        # tab click
-        tab_y = py + 72
-        tx = px + 12
-        for i, tab in enumerate(self.tabs):
-            tw = max(70, len(tab["name"]) * 10 + 20)
-            if _rect_contains((tx, tab_y, tw, 28), (mx, my)):
+        # Same geometry as rendering, including the second tab row.
+        for i in range(len(self.tabs)):
+            if self._tab_rect(i).move(px, py).collidepoint(mx, my):
                 self.tab_index = i
                 self.scroll_offset = 0
                 return
-            tx += tw + 6
 
         # item click
         items = self._items()
@@ -1001,6 +1050,8 @@ class Trainer:
         if p is None:
             return
 
+        if self.infinite_ult:
+            p.ult_charge = 100.0
         if self.god_mode or self.no_damage:
             p.invincible_timer = max(p.invincible_timer, 0.25)
         if self.god_mode:
@@ -1037,7 +1088,7 @@ class Trainer:
     #  ACTIVE CHEAT LABELS (for compact HUD)
     # ─────────────────────────────────────────────────────────────
     def _active_labels(self):
-        out = []
+        out = ["ULT"] if self.infinite_ult else []
         flags = [
             ("god_mode","God"),("no_damage","NoDmg"),("auto_heal","AutoHeal"),
             ("one_hit_kill","OHK"),("always_crit","Crit"),("always_mega","Mega"),
@@ -1091,24 +1142,23 @@ class Trainer:
 
         # background
         panel = pygame.Surface((pw, ph), pygame.SRCALPHA)
-        panel.fill((10, 12, 18, 235))
-        pygame.draw.rect(panel, (70, 120, 200), (0, 0, pw, ph), 2)
+        panel.fill((12, 18, 29, 245))
+        pygame.draw.rect(panel, (109, 249, 197), (0, 0, pw, ph), 1, border_radius=12)
 
         # title
-        self._text(panel, self.f_big, "SLIDE SURVIVORS TRAINER v2", 14, 10, CYAN)
+        self._text(panel, self.f_big, "SLIDE SURVIVORS / DEV DECK v3", 14, 10, CYAN)
         self._text(panel, self.f_xs, "F1 close | Arrows/Mouse navigate | Left/Right adjust | ~/tilde console", 14, 40, GRAY)
         self._text(panel, self.f_xs, "Shift+Left/Right = x10 step for stat editor", 14, 54, GRAY)
 
         # tabs
-        tab_y = 72
-        tx = 12
         for i, tab in enumerate(self.tabs):
-            tw = max(70, len(tab["name"]) * 10 + 20)
-            bg = (35, 75, 140) if i == self.tab_index else (28, 30, 40)
-            pygame.draw.rect(panel, bg, (tx, tab_y, tw, 26), border_radius=4)
-            pygame.draw.rect(panel, (100, 140, 210), (tx, tab_y, tw, 26), 1, border_radius=4)
-            self._text(panel, self.f_xs, tab["name"], tx + 8, tab_y + 6, WHITE)
-            tx += tw + 6
+            rect = self._tab_rect(i)
+            selected = i == self.tab_index
+            pygame.draw.rect(panel, (35, 78, 75) if selected else (23, 34, 50), rect, border_radius=5)
+            self._text(panel, self.f_xs, tab['name'], rect.x+10, rect.y+6, (109, 249, 197) if selected else WHITE)
+        world = getattr(self.game, 'world', None)
+        if world:
+            self._text(panel, self.f_xs, f"SEED {world.seed}  /  {len(self.game.enemies)} entities", 14, 137, GRAY)
 
         # items
         start_y = self.header_h
@@ -1122,6 +1172,8 @@ class Trainer:
 
             bg = (40, 50, 70, 230) if selected else (20, 22, 30, 210)
             pygame.draw.rect(panel, bg, (12, iy, pw - 24, self.row_h - 2), border_radius=4)
+            if selected:
+                pygame.draw.rect(panel, (109, 249, 197), (12, iy+3, 3, self.row_h-8), border_radius=1)
 
             # label
             self._text(panel, self.f_med, item["label"], 22, iy + 4, WHITE)
@@ -1421,10 +1473,12 @@ def _patched_run(self):
     _TRAINER = trainer
 
     while self.running:
-        dt = self.clock.tick(FPS) / 1000.0
+        dt = self.clock.tick(self.settings_manager.get("fps_limit", FPS)) / 1000.0
         dt = min(dt, 0.05)
 
-        events = pygame.event.get()
+        previous_state = self.state
+        previous_frame = self.screen.copy()
+        events = self.prepare_events(pygame.event.get())
         for ev in events:
             if ev.type == pygame.QUIT:
                 self.running = False
@@ -1438,7 +1492,11 @@ def _patched_run(self):
         menu_open = trainer.visible or trainer.console.visible
         sdt = dt * trainer.time_scale
 
-        if self.state == "menu":
+        if self.state in ("language_select", "hero_select", "achievements", "settings"):
+            if not menu_open:
+                getattr(self, "update_" + self.state)(events)
+            getattr(self, "draw_" + self.state)()
+        elif self.state == "menu":
             if not menu_open:
                 self.update_menu(events)
             self.draw_menu()
@@ -1473,8 +1531,12 @@ def _patched_run(self):
             self.draw_game_over()
             trainer.draw_world(self.screen)
 
+        if self.state != previous_state and (self.state == "menu" or previous_state == "menu"):
+            self.ui.begin_transition(previous_frame)
+        if self.settings_manager.get("menu_animations"):
+            self.ui.draw_transition(self.screen)
         trainer.draw_overlay(self.screen)
-        pygame.display.flip()
+        self.present()
 
     pygame.quit()
     sys.exit()
@@ -1530,5 +1592,8 @@ def _patch():
 # ═════════════════════════════════════════════════════════════════
 if __name__ == "__main__":
     _patch()
-    game = _game_main.Game()
+    import argparse
+    parser = argparse.ArgumentParser(description="Slide Survivors Trainer")
+    parser.add_argument('--seed', type=int)
+    game = _game_main.Game(world_seed=parser.parse_args().seed)
     game.run()

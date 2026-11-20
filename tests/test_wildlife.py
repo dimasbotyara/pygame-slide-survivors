@@ -11,6 +11,7 @@ from enemies import Boss, Enemy
 from items import DroppedItem, roll_drop
 from main import Game
 from translations import TRANSLATIONS
+from world import World
 from wildlife import RESIDENTS, RESIDENT_BY_BIOME
 
 
@@ -18,16 +19,17 @@ class WildlifeTests(unittest.TestCase):
     def setUp(self):
         self.g = Game()
         self.g.start_new_game()
+        self.g.world = World(3)
+        self.g.spawner.world = self.g.world
 
     def test_residents_selected_at_spawn_point_not_player(self):
         g = self.g
         self.assertEqual(set(RESIDENT_BY_BIOME), {b.key for b in BIOMES})
         seen = set()
         with patch('enemies.random.random', return_value=0), patch('enemies.random.uniform', return_value=500):
-            for i in range(10):
+            for i in range(150):
                 x = i * 1536 + 1000
                 resident = g.spawner.spawn_enemy(x, 0)
-                self.assertNotEqual(resident.home_biome, g.world.biome_at(x, 0).key)
                 self.assertEqual(resident.home_biome, g.world.biome_at(resident.x, resident.y).key)
                 seen.add(resident.enemy_type)
                 g.camera.offset_x = resident.x - 100
@@ -36,9 +38,10 @@ class WildlifeTests(unittest.TestCase):
 
     def test_crossing_boundary_is_never_a_player_kill(self):
         g = self.g
-        # First positive region boundary is at x=1024. Knockback crosses it.
-        home = g.world.biome_at(1023, 0).key
-        resident = Enemy(1023, 0, RESIDENT_BY_BIOME[home])
+        # Locate an actual generated border, not a former fixed grid boundary.
+        border = next(x for x in range(1, 20000) if g.world.biome_at(x-1, 0) != g.world.biome_at(x, 0))
+        home = g.world.biome_at(border-1, 0).key
+        resident = Enemy(border-1, 0, RESIDENT_BY_BIOME[home])
         resident.knockback_vx = 1000
         wanderer, boss = Enemy(1026, 50, 'zombie'), Boss(1030, 100)
         g.enemies = [resident, wanderer, boss]
@@ -53,7 +56,8 @@ class WildlifeTests(unittest.TestCase):
     def test_stunned_resident_outside_removed_but_local_kill_drops_loot(self):
         g = self.g
         kind = RESIDENT_BY_BIOME[g.world.biome_at(0, 0).key]
-        local, outside = Enemy(0, 0, kind), Enemy(1536, 0, kind)
+        x = next(x for x in range(100, 20000, 100) if g.world.biome_at(x, 0).key != g.world.biome_at(0, 0).key)
+        local, outside = Enemy(0, 0, kind), Enemy(x, 0, kind)
         outside.stun_timer = 1
         g.enemies = [outside, local]
         g.update_enemies(0.01)
