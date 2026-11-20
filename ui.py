@@ -177,7 +177,6 @@ class UI:
         self.draw_ult_bar(screen, player)
         self.draw_stats_mini(screen, player, enemy_count)
         self.draw_combo(screen, player)
-        self.draw_dash_hint(screen, player)
         if active_boss:
             self.draw_boss_bar(screen, active_boss)
 
@@ -369,19 +368,6 @@ class UI:
         ratio = max(0.0, min(1.0, player.combo_timer / player.combo_window))
         pygame.draw.rect(screen, DARK_GRAY, (bar_x, bar_y, bar_w, bar_h))
         pygame.draw.rect(screen, ORANGE, (bar_x, bar_y, int(bar_w * ratio), bar_h))
-
-    def draw_dash_hint(self, screen, player):
-        if player.dash_attack_window_timer > 0 and not player.dash_attack_triggered:
-            text = t("DASH_HINT")
-            pulse = abs(math.sin(player.body_anim_timer * 10))
-            color = (
-                int(255 * pulse + 200 * (1 - pulse)),
-                int(150 * pulse + 100 * (1 - pulse)),
-                0
-            )
-            surface = self.font.render(text, True, color)
-            rect = surface.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 60))
-            screen.blit(surface, rect)
 
     def draw_stats_mini(self, screen, player, enemy_count):
         if not self.setting('hud_stats'):
@@ -799,7 +785,7 @@ class UI:
         content_rect = pygame.Rect(card.x+88, 260, card.w-176, 220)
         current = screen.subsurface(content_rect).copy()
         progress = min(1, (now-getattr(self, '_hero_started', -1000))/260)
-        if progress < 1 and self.setting("menu_animations"):
+        if progress < 1 and self.setting("hero_animations"):
             screen.blit(hero_before, content_rect)
             eased = 1-(1-progress)**3
             old = getattr(self, '_hero_old', None)
