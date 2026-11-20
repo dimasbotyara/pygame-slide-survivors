@@ -2,6 +2,7 @@
 
 import pygame
 import math
+from functools import lru_cache
 from settings import *
 from highscores import load_highscores, format_time, calculate_score
 from translations import t
@@ -46,11 +47,17 @@ def settings_rect(i):
 
 
 def settings_tab_rect(i):
-    return pygame.Rect(70+i*287, 102, 279, 48)
+    gap = 8
+    width = (1140-gap*(len(TABS)-1))//len(TABS)
+    return pygame.Rect(70+i*(width+gap), 102, width, 48)
 
 
 def result_rect(i):
     return pygame.Rect(410, 440 + i*65, 460, 54)
+
+
+def bestiary_rect():
+    return pygame.Rect(982, 29, 228, 38)
 
 
 def hero_arrow_rect(step):
@@ -106,6 +113,7 @@ class UI:
         self.font_combo = TextFont('display', 36)
         self.mono = TextFont('mono', 16)
         self.body = TextFont('body', 19)
+        self.fitted_text = lru_cache(maxsize=128)(self.fitted_text)
 
     def setting(self, key):
         settings = getattr(self, 'settings', None)
@@ -144,7 +152,7 @@ class UI:
             pygame.draw.rect(screen, EDGE, rect, 1, border_radius=6)
         number = self.mono.render(f'{index+1:02}', True, fg if selected else MUTED)
         screen.blit(number, number.get_rect(midleft=(rect.left+18, rect.centery)))
-        text = self.font.render(label, True, fg)
+        text = (self.body if rect.w < 300 else self.font).render(label, True, fg)
         screen.blit(text, text.get_rect(midleft=(rect.left+62, rect.centery)))
         if selected:
             x, y = rect.right-25, rect.centery
@@ -406,25 +414,13 @@ class UI:
         # Тёмный прозрачный круговой фон
         pygame.draw.circle(mm_surface, (12, 16, 32, 210), (center, center), radius)
 
-        if world is not None and self.setting('minimap_biomes'):
-            # Quantise the map origin; rebuild at most five times per second.
-            origin = (round(player.x/64)*64, round(player.y/64)*64)
-            cache_key = (id(world), origin)
-            if (getattr(self, '_map_key', None) != cache_key and
-                    pygame.time.get_ticks() >= getattr(self, '_map_next', 0)):
-                terrain = pygame.Surface((mm_size, mm_size), pygame.SRCALPHA)
-                for my in range(0, mm_size, 6):
-                    for mx in range(0, mm_size, 6):
-                        if (mx+3-center)**2 + (my+3-center)**2 < (radius-4)**2:
-                            color = world.ground_color_at(origin[0]+(mx+3-center)/MINIMAP_SCALE,
-                                                          origin[1]+(my+3-center)/MINIMAP_SCALE)
-                            pygame.draw.rect(terrain, color, (mx, my, 6, 6))
-                self._map_terrain, self._map_key = terrain, cache_key
-                self._map_next = pygame.time.get_ticks()+200
-            if getattr(self, '_map_key', (None,))[0] == id(world):
-                mm_surface.blit(self._map_terrain, (0, 0))
-            label = self.font_small.render(t('BIOME_'+world.biome_at(player.x, player.y).key), True, PAPER)
-            screen.blit(label, label.get_rect(midbottom=(mm_x+center, mm_y-4)))
+        if world is not None:
+            biome = world.biome_at(player.x, player.y)
+            key = t('BIOME_'+biome.key)
+            if getattr(self, '_biome_label_key', None) != key:
+                self._biome_label_key = key
+                self._biome_label = self.font_small.render(key, True, PAPER)
+            screen.blit(self._biome_label, self._biome_label.get_rect(midbottom=(mm_x+center, mm_y-4)))
 
         # Радарная сетка (концентрические круги)
         pygame.draw.circle(mm_surface, (0, 220, 255, 45), (center, center), int(radius * 0.66), 1)
@@ -443,7 +439,7 @@ class UI:
             pygame.draw.line(mm_surface, (0, 255, 220, 70), (center, center), (end_x, end_y), 2)
 
         # Опыт (XP gems)
-        for orb in xp_orbs:
+        for orb in (xp_orbs if self.setting("minimap_pickups") else ()):
             dx = (orb.x - player.x) * MINIMAP_SCALE
             dy = (orb.y - player.y) * MINIMAP_SCALE
             if dx * dx + dy * dy <= radius * radius:
@@ -452,7 +448,7 @@ class UI:
                 pygame.draw.circle(mm_surface, (255, 240, 80, 220), (mx, my), 1)
 
         # Выпавшие предметы (Health, Bomb, Magnet...)
-        for item in dropped_items:
+        for item in (dropped_items if self.setting("minimap_pickups") else ()):
             dx = (item.x - player.x) * MINIMAP_SCALE
             dy = (item.y - player.y) * MINIMAP_SCALE
             if dx * dx + dy * dy <= radius * radius:
@@ -665,13 +661,19 @@ class UI:
             if type(value) is bool:
                 text = t('SETTING_ON' if value else 'SETTING_OFF')
             elif key == 'resolution':
-                text = f'{value[0]} × {value[1]}'
+                text = t('NATIVE_RESOLUTION') if value == (0, 0) else f'{value[0]} × {value[1]}'
             elif key == 'language':
                 text = t('LANG_RU' if value == 'ru' else 'LANG_EN')
             elif key == 'fps_limit' and value == 0:
                 text = t('UNLIMITED')
             elif key == 'camera_smoothing' and value == 0:
                 text = t('SETTING_OFF')
+            elif key == 'terrain_quality':
+                text = t('QUALITY_'+value)
+            elif key == 'biome_blend':
+                text = t('BLEND_'+str(value))
+            elif key == 'decoration_density':
+                text = f'{value*100:g}%'
             elif key == 'particle_density':
                 text = f'{value:g}×'
             else:
@@ -737,6 +739,11 @@ class UI:
             head = (int(x + progress * 350), int((1-progress) * SCREEN_HEIGHT))
             pygame.draw.line(screen, (32, 67, 76), head, (head[0]-13, head[1]+27), 2)
         screen.blit(self.mono.render('SS  /  ' + t('LOBBY'), True, MINT), (70, 40))
+        guide_button = bestiary_rect()
+        pygame.draw.rect(screen, PANEL, guide_button, border_radius=7)
+        pygame.draw.rect(screen, MINT, guide_button, 1, border_radius=7)
+        guide_label = self.body.render(t('GUIDE_BUTTON'), True, MINT)
+        screen.blit(guide_label, guide_label.get_rect(center=guide_button.center))
         pygame.draw.line(screen, EDGE, (70, 76), (1210, 76))
         screen.blit(self.font_title.render(t('TITLE'), True, PAPER), (66, 85))
         screen.blit(self.body.render(t('SUBTITLE'), True, MUTED), (72, 163))
@@ -760,7 +767,8 @@ class UI:
             ax, ay = button.center
             pygame.draw.lines(screen, accent if hot else PAPER, False,
                               [(ax-step*4, ay-9), (ax+step*5, ay), (ax-step*4, ay+9)], 3)
-        hero_before = screen.copy()
+        content_rect = pygame.Rect(card.x+88, 260, card.w-176, 220)
+        hero_before = screen.subsurface(content_rect).copy()
         now = pygame.time.get_ticks()
         if getattr(self, '_lobby_hero', selected_hero_index) != selected_hero_index:
             delta = (selected_hero_index - self._lobby_hero) % len(HERO_KEYS)
@@ -792,7 +800,7 @@ class UI:
         current = screen.subsurface(content_rect).copy()
         progress = min(1, (now-getattr(self, '_hero_started', -1000))/260)
         if progress < 1 and self.setting("menu_animations"):
-            screen.blit(hero_before, content_rect, content_rect)
+            screen.blit(hero_before, content_rect)
             eased = 1-(1-progress)**3
             old = getattr(self, '_hero_old', None)
             direction = getattr(self, '_hero_direction', 1)

@@ -56,7 +56,7 @@ class SettingsDisplayTests(unittest.TestCase):
         g.settings_tab, g.settings_selection = 0, 1
         with patch.object(g.display, 'apply') as apply:
             g.update_settings([press(pygame.K_RIGHT)])
-            self.assertEqual(g.settings_manager.get('resolution'), (1600, 900))
+            self.assertEqual(g.settings_manager.get('resolution'), (1280, 800))
             apply.assert_called_once()
         with patch.object(g.display, 'apply') as apply:
             events = g.prepare_events([press(pygame.K_RETURN, mod=pygame.KMOD_ALT)])
@@ -93,7 +93,8 @@ class SettingsDisplayTests(unittest.TestCase):
         self.assertEqual(cfg.get('resolution'), (1280, 720))
         self.assertEqual(cfg.get('particle_density'), 2)
         self.assertTrue(cfg.get('minimap'))
-        self.assertTrue(cfg.get('minimap_biomes'))
+        self.assertNotIn('minimap_biomes', cfg.settings)
+        self.assertNotIn('biome_notifications', cfg.settings)
 
     def test_every_tab_is_translated_renders_and_changes_only_selected_option(self):
         g = self.game
@@ -166,17 +167,14 @@ class SettingsDisplayTests(unittest.TestCase):
         self.assertEqual(a, radar(9000, 3))
         self.assertNotEqual(a, radar(9000, 3.5))
 
-    def test_biome_entry_only_names_the_biome(self):
+    def test_biome_entry_never_creates_notifications(self):
         g = self.game
         g.start_new_game()
-        g.update_playing(.01, [])
-        biome_name = t('BIOME_'+g.world.biome_at(g.player.x, g.player.y).key)
-        self.assertIn(biome_name, [m.text for m in g.particle_manager.messages])
         g.particle_manager.messages.clear()
-        g.biome_key = None
-        g.settings_manager.settings['biome_notifications'] = False
+        # Even manually supplied legacy keys must not re-enable removed features.
+        g.settings_manager.settings['biome_notifications'] = True
         g.update_playing(.01, [])
-        self.assertNotIn(biome_name, [m.text for m in g.particle_manager.messages])
+        self.assertFalse(g.particle_manager.messages)
 
     def test_ultimate_text_fits_bar_for_every_hero_and_language(self):
         for lang in ('ru', 'en'):

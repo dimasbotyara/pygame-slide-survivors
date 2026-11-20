@@ -1477,7 +1477,7 @@ def _patched_run(self):
         dt = min(dt, 0.05)
 
         previous_state = self.state
-        previous_frame = self.screen.copy()
+        previous_frame = self.transition_snapshot()
         events = self.prepare_events(pygame.event.get())
         for ev in events:
             if ev.type == pygame.QUIT:
@@ -1492,7 +1492,7 @@ def _patched_run(self):
         menu_open = trainer.visible or trainer.console.visible
         sdt = dt * trainer.time_scale
 
-        if self.state in ("language_select", "hero_select", "achievements", "settings"):
+        if self.state in ("language_select", "hero_select", "achievements", "settings", "bestiary"):
             if not menu_open:
                 getattr(self, "update_" + self.state)(events)
             getattr(self, "draw_" + self.state)()
@@ -1531,7 +1531,7 @@ def _patched_run(self):
             self.draw_game_over()
             trainer.draw_world(self.screen)
 
-        if self.state != previous_state and (self.state == "menu" or previous_state == "menu"):
+        if previous_frame is not None and self.state != previous_state and (self.state == "menu" or previous_state == "menu"):
             self.ui.begin_transition(previous_frame)
         if self.settings_manager.get("menu_animations"):
             self.ui.draw_transition(self.screen)
