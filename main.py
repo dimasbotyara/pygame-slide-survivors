@@ -6,6 +6,7 @@ import sys
 import math
 import random
 from settings import *
+from abilities import IceTrail, PulseAuras
 from camera import Camera
 from player import Player
 from enemies import Enemy, Boss, EnemyProjectile, EnemySpawner
@@ -58,6 +59,7 @@ class Game:
         self.world = None
         self.enemies = []
         self.enemy_projectiles = []
+        self.pending_explosions = []
         self.xp_orbs = []
         self.dropped_items = []
         self.spawner = None
@@ -146,8 +148,11 @@ class Game:
         self.camera = Camera(SCREEN_WIDTH, SCREEN_HEIGHT)
         self.camera.shake_enabled = self.settings_manager.get("screen_shake", True)
         self.world = World()
+        self.ice_trail = IceTrail()
+        self.pulse_auras = PulseAuras()
         self.enemies = []
         self.enemy_projectiles = []
+        self.pending_explosions = []
         self.xp_orbs = []
         self.dropped_items = []
         self.spawner = EnemySpawner()
@@ -436,10 +441,18 @@ class Game:
         mouse_pos = pygame.mouse.get_pos()
 
         # Обновить игрока
+        move_start = self.player.x, self.player.y
         self.player.update(dt, keys, mouse_pos, self.camera)
 
         # Ограничить игрока ареной босса
         self.enforce_boss_arena()
+
+        self.ice_trail.update(dt, self.player, move_start)
+        if self.player.is_sliding:
+            for enemy in self.enemies:
+                if enemy.check_slide_escape(self.player, move_start) and not self.player.dodge_charge:
+                    self.player.dodge_charge = True
+                    self.particle_manager.add_message(t("MSG_PERFECT_DODGE"), CYAN)
 
         # Обновить камеру (с look-ahead по направлению движения)
         self.camera.update(self.player.x, self.player.y, dt,
@@ -488,6 +501,7 @@ class Game:
         self.update_enemies(dt)
 
         # Обновить снаряды врагов
+        self.update_explosion_fuses(dt)
         self.update_enemy_projectiles(dt)
 
         # Некроманты — воскрешение
@@ -502,7 +516,7 @@ class Game:
         self.check_dash_attack()
         self.check_slide_knockback()
         self.check_counter_attack()
-        self.check_enemy_contact_damage()
+        self.check_enemy_attacks(dt)
         self.check_shockwave_damage()
         self.check_electric_trail_damage(dt)
 
@@ -516,6 +530,7 @@ class Game:
         self.update_items(dt)
 
         # Ауры
+        self.pulse_auras.update(dt, self.player, self.enemies, self.deal_damage_to_enemy)
         self.apply_aura_damage(dt)
         self.apply_aura_slow(dt)
 
@@ -624,6 +639,7 @@ class Game:
 
             # Стан — враг не двигается и не атакует
             if getattr(enemy, 'stun_timer', 0) > 0:
+                enemy.windup_left = 0.0
                 enemy.stun_timer -= dt
                 enemy.velocity_x = 0
                 enemy.velocity_y = 0
@@ -632,35 +648,19 @@ class Game:
                     enemy.flash_timer = 0.05
                 continue
 
+            enemy.on_ice = bool(self.ice_trail.patches) and self.ice_trail.covers(enemy)
             enemy.update(dt, self.player.x, self.player.y, self.enemies)
-
-            # Стрельба (для стрелков)
-            if getattr(enemy, 'shoot_range', 0) > 0:
-                if enemy.should_shoot(self.player.x, self.player.y):
-                    self.spawn_enemy_projectile(enemy)
 
         # Удалить мёртвых
         self.enemies = [e for e in self.enemies if e.alive]
 
     def spawn_enemy_projectile(self, enemy):
-        """Создать снаряд врага-стрелка"""
-        dx = self.player.x - enemy.x
-        dy = self.player.y - enemy.y
-        dist = math.sqrt(dx * dx + dy * dy)
-
-        if dist > 0:
-            dir_x = dx / dist
-            dir_y = dy / dist
-        else:
-            dir_x, dir_y = 1, 0
-
-        projectile = EnemyProjectile(
-            enemy.x, enemy.y,
-            dir_x, dir_y,
-            enemy.shoot_speed,
-            enemy.damage
-        )
-        self.enemy_projectiles.append(projectile)
+        for offset in enemy.shot_offsets:
+            angle = enemy.aim_angle + offset
+            self.enemy_projectiles.append(EnemyProjectile(
+                enemy.x, enemy.y, math.cos(angle), math.sin(angle),
+                enemy.shoot_speed, enemy.damage
+            ))
 
     # ================================================================
     # НЕКРОМАНТЫ
@@ -702,8 +702,10 @@ class Game:
     # ================================================================
     def update_enemy_projectiles(self, dt):
         """Обновить снаряды врагов и проверить столкновение с игроком"""
+        level = self.player.stats["stasis_aura"]
         for proj in self.enemy_projectiles:
-            proj.update(dt)
+            inside = level and math.hypot(proj.x-self.player.x, proj.y-self.player.y) <= STASIS_RADIUS
+            proj.update(dt, max(0.25, 1 - level * 0.2) if inside else 1.0)
 
             if proj.alive:
                 dx = self.player.x - proj.x
@@ -840,14 +842,14 @@ class Game:
         if is_mega:
             max_targets += 5  # мега-удар бьёт ещё больше
 
-        targets_hit = 0
+        targets_hit = len(self.player.fist_hit_enemies)
 
         for enemy in self.enemies:
             if not enemy.alive:
                 continue
             if enemy in self.player.fist_hit_enemies:
                 continue
-            if targets_hit >= max_targets:
+            if not attack["cleave"] and targets_hit >= max_targets:
                 break
 
             # Расстояние до врага
@@ -1112,6 +1114,9 @@ class Game:
                 particle_color=ORANGE, particle_count=12,
                 source="dash"
             )
+            if not self.player.dash_attack_hit_enemies and self.player.stats["dash_heal"]:
+                self.player.heal(self.player.stats["dash_heal"])
+                self.particle_manager.spawn_heal_particles(self.player.x, self.player.y, count=3)
             self.player.dash_attack_hit_enemies.append(enemy)
 
     # ================================================================
@@ -1295,29 +1300,16 @@ class Game:
     # ================================================================
     # КОНТАКТНЫЙ УРОН ВРАГОВ
     # ================================================================
-    def check_enemy_contact_damage(self):
-        """Проверить контактный урон от врагов к игроку"""
+    def check_enemy_attacks(self, dt):
         for enemy in self.enemies:
-            if not enemy.alive:
-                continue
-            if not enemy.can_deal_damage():
-                continue
-
-            # Оглушённый враг не атакует
-            if getattr(enemy, 'stun_timer', 0) > 0:
-                continue
-
-            dx = self.player.x - enemy.x
-            dy = self.player.y - enemy.y
-            dist = math.sqrt(dx * dx + dy * dy)
-            contact_dist = self.player.size + enemy.size
-
-            if dist < contact_dist:
+            impact = enemy.advance_attack(dt, self.player)
+            if impact == "shot":
+                self.spawn_enemy_projectile(enemy)
+            elif impact == "hit":
                 thorns_damage = self.player.take_damage(enemy.damage)
-                enemy.reset_hit_cooldown()
 
                 # Шипы — ответный урон
-                if thorns_damage > 0 and self.player.stats["thorns"] > 0:
+                if thorns_damage > 0:
                     killed = enemy.take_damage(thorns_damage)
                     self.particle_manager.add_damage_number(
                         enemy.x, enemy.y, thorns_damage, color=GRAY
@@ -1343,7 +1335,7 @@ class Game:
         """Обработка убийства врага"""
         self.player.enemies_killed += 1
         self.player.add_combo()
-        self.player.gain_ult_charge(3.0)
+        self.player.gain_ult_charge(3.0 + self.player.stats["ult_per_kill"])
 
         # Частицы смерти
         death_particles = 15
@@ -1377,7 +1369,7 @@ class Game:
 
         # Взрывник — взрыв при смерти
         if getattr(enemy, 'should_explode', False):
-            self.handle_explosion(enemy)
+            self.pending_explosions.append((enemy, EXPLOSION_FUSE))
 
         # Сохранить корпус для некроманта
         if not getattr(enemy, 'is_boss', False):
@@ -1386,6 +1378,14 @@ class Game:
                 enemy.enemy_type,
                 self.game_time
             ))
+
+    def update_explosion_fuses(self, dt):
+        pending, self.pending_explosions = self.pending_explosions, []
+        for enemy, remaining in pending:
+            if remaining <= dt:
+                self.handle_explosion(enemy)
+            else:
+                self.pending_explosions.append((enemy, remaining - dt))
 
     def handle_explosion(self, exploder):
         """Обработка взрыва взрывника при смерти"""
@@ -1510,13 +1510,14 @@ class Game:
             self.particle_manager.spawn_bomb_particles(
                 self.player.x, self.player.y
             )
-            self.particle_manager.add_message(
-                t("MSG_BOMB", killed_count), RED
-            )
+            message = t("MSG_BOMB", killed_count)
+            if self.player.extend_active_combo(BOMB_COMBO_EXTENSION):
+                message += " " + t("MSG_COMBO_EXTENDED", int(BOMB_COMBO_EXTENSION))
+            self.particle_manager.add_message(message, RED)
             self.camera.add_shake(SHAKE_BOMB)
 
         elif item_type == "speed_boost":
-            self.player.speed_boost_timer = SPEED_BOOST_DURATION
+            self.player.speed_boost_timer = SPEED_BOOST_DURATION + self.player.stats["boost_duration"]
             self.player.speed_boost_multiplier = SPEED_BOOST_MULTIPLIER
             self.particle_manager.add_message(t("MSG_SPEED_BOOST"), CYAN)
 
@@ -1644,7 +1645,9 @@ class Game:
                 boss.draw_arena(self.screen, self.camera)
 
         # Ауры игрока
+        self.ice_trail.draw(self.screen, self.camera)
         self.draw_auras()
+        self.pulse_auras.draw(self.screen, self.camera, self.player, self.game_time)
 
         # XP сферы
         for orb in self.xp_orbs:
@@ -1658,6 +1661,14 @@ class Game:
         for enemy in self.enemies:
             if getattr(enemy, 'stun_timer', 0) > 0:
                 self.draw_stun_effect(enemy)
+
+        for source, remaining in self.pending_explosions:
+            center = self.camera.apply(source.x, source.y)
+            pygame.draw.circle(self.screen, ORANGE, center, source.explode_radius, 2)
+            pygame.draw.circle(self.screen, RED, center,
+                               int(source.explode_radius * (1 - remaining / EXPLOSION_FUSE)), 3)
+        for enemy in self.enemies:
+            enemy.draw_windup(self.screen, self.camera)
 
         # Враги
         for enemy in self.enemies:

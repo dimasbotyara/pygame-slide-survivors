@@ -76,9 +76,23 @@ DASH_ATTACK_RANGE_MULTIPLIER = 1.5
 DASH_ATTACK_ARC = 360
 
 # ============================================================
+# УВОРОТ, ЛЁД И АУРЫ
+# ============================================================
+PERFECT_DODGE_WINDOW = 0.16
+ICE_RADIUS = 24
+ICE_DURATION = 2.0
+REPULSE_RADIUS = 95
+REPULSE_PERIOD = 2.5
+DRAIN_RADIUS = 115
+DRAIN_PERIOD = 2.0
+STASIS_RADIUS = 145
+
+# ============================================================
 # КОМБО
 # ============================================================
 COMBO_TIMEOUT = 3.0
+BOMB_COMBO_EXTENSION = 5.0
+EXPLOSION_FUSE = 0.65
 COMBO_XP_BONUS_PER_STACK = 5
 COMBO_MAX_MULTIPLIER = 500
 
@@ -156,6 +170,24 @@ ENEMY_TYPES = {
         "hp": 30, "speed": 60, "damage": 8, "size": 14,
         "color": GREEN, "outline_color": DARK_GREEN,
         "xp": 10, "weight": 50, "min_time": 0, "knockback_resist": 0.0,
+    },
+    "skirmisher": {
+        "hp": 24, "speed": 112, "damage": 9, "size": 12,
+        "color": TEAL, "outline_color": CYAN,
+        "xp": 14, "weight": 18, "min_time": 20, "knockback_resist": 0.0,
+    },
+    "crusher": {
+        "hp": 95, "speed": 46, "damage": 19, "size": 19,
+        "color": BROWN, "outline_color": GOLD,
+        "xp": 28, "weight": 12, "min_time": 75, "knockback_resist": 0.5,
+        "strike_radius": 74, "windup": 0.85,
+    },
+    "prism": {
+        "hp": 38, "speed": 48, "damage": 10, "size": 15,
+        "color": PURPLE, "outline_color": PINK,
+        "xp": 32, "weight": 9, "min_time": 135, "knockback_resist": 0.1,
+        "shoot_range": 270, "shoot_speed": 205, "shoot_cooldown": 2.8,
+        "shot_offsets": (-0.28, 0, 0.28), "windup": 0.8,
     },
     "ghoul": {
         "hp": 15, "speed": 140, "damage": 5, "size": 10,

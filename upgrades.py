@@ -66,6 +66,18 @@ def create_all_upgrades():
     upgrades.append(Upgrade("xp_magnet_aura", YELLOW, "xp_radius", 50, max_level=3, category="utility"))
     upgrades.append(Upgrade("gold_fever", GREEN, "heal_on_kills", 15, max_level=3, category="utility"))
 
+    upgrades.append(Upgrade("ice_trail", CYAN, "ice_trail", 1, max_level=3, category="slide"))
+    upgrades.append(Upgrade("repulse_aura", TEAL, "repulse_aura", 1, max_level=3, category="utility"))
+    upgrades.append(Upgrade("drain_aura", PINK, "drain_aura", 1, max_level=3, category="utility"))
+    upgrades.append(Upgrade("stasis_aura", BLUE, "stasis_aura", 1, max_level=3, category="utility"))
+
+    upgrades.append(Upgrade("cleave", CYAN, "cleave", 1, max_level=1, category="fist"))
+    upgrades.append(Upgrade("combo_grace", GOLD, "combo_grace", 0.75, max_level=4, category="utility"))
+    upgrades.append(Upgrade("ult_per_kill", PURPLE, "ult_per_kill", 1, max_level=3, category="utility"))
+    upgrades.append(Upgrade("hit_grace", SILVER, "hit_grace", 0.15, max_level=4, category="utility"))
+    upgrades.append(Upgrade("boost_duration", LIME, "boost_duration", 2, max_level=3, category="utility"))
+    upgrades.append(Upgrade("dash_heal", PINK, "dash_heal", 3, max_level=4, category="slide"))
+
     # ──── БАЗОВЫЕ ────
     upgrades.append(Upgrade("max_hp", RED, "max_hp", 20, category="basic"))
     upgrades.append(Upgrade("hp_regen", PINK, "hp_regen", 0.5, category="basic"))

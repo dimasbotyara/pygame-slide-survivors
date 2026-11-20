@@ -31,7 +31,13 @@ class Enemy:
         self.shoot_range = data.get("shoot_range", 0)
         self.shoot_speed = data.get("shoot_speed", 0)
         self.shoot_cooldown_max = data.get("shoot_cooldown", 0)
-        self.shoot_timer = 0.0
+        self.shot_offsets = data.get("shot_offsets", (0,))
+        self.strike_radius = data.get("strike_radius", self.size + 8)
+        self.windup_dodged = False
+        self.on_ice = False
+        self.windup_duration = data.get("windup", 0.55 if self.shoot_range else 0.4)
+        self.windup_left = 0.0
+        self.aim_angle = 0.0
 
         # Некромант
         self.revive_radius = data.get("revive_radius", 0)
@@ -86,8 +92,6 @@ class Enemy:
             self.hit_cooldown -= dt
         if self.flash_timer > 0:
             self.flash_timer -= dt
-        if self.shoot_timer > 0:
-            self.shoot_timer -= dt
         if self.revive_timer > 0:
             self.revive_timer -= dt
 
@@ -142,7 +146,18 @@ class Enemy:
 
         self.speed = current_speed
 
-        if should_move:
+        if self.enemy_type == "skirmisher" and dist > self.strike_radius:
+            # Weave across the approach rather than running straight at the hero.
+            angle = math.sin(self.anim_timer * 3) * 0.95
+            c, s = math.cos(angle), math.sin(angle)
+            dir_x, dir_y = dir_x * c - dir_y * s, dir_x * s + dir_y * c
+
+        if should_move and self.windup_left <= 0:
+            if self.on_ice:
+                # Carry the incoming heading across the ice, not the new target heading.
+                speed = math.hypot(self.velocity_x, self.velocity_y)
+                if speed > 0:
+                    dir_x, dir_y = self.velocity_x / speed, self.velocity_y / speed
             self.velocity_x = dir_x * current_speed
             self.velocity_y = dir_y * current_speed
         else:
@@ -219,22 +234,55 @@ class Enemy:
         self.knockback_vx += force_x * (1 - resist)
         self.knockback_vy += force_y * (1 - resist)
 
-    def can_deal_damage(self):
-        return self.hit_cooldown <= 0
+    def advance_attack(self, dt, player):
+        """Return one impact event; a miss also spends the attack cooldown."""
+        if not self.alive or getattr(self, "stun_timer", 0) > 0:
+            self.windup_left = 0.0
+            return None
+        distance = math.hypot(player.x - self.x, player.y - self.y)
+        reach = self.shoot_range or (self.strike_radius + player.size)
+        if self.windup_left <= 0:
+            if self.hit_cooldown <= 0 and distance <= reach:
+                self.aim_angle = math.atan2(player.y - self.y, player.x - self.x)
+                self.windup_dodged = False
+                self.windup_left = self.windup_duration
+            return None
 
-    def reset_hit_cooldown(self):
-        self.hit_cooldown = 0.5
+        self.windup_left = max(0.0, self.windup_left - dt)
+        if self.windup_left > 0:
+            return None
+        self.hit_cooldown = self.shoot_cooldown_max or 0.5
+        if self.shoot_range:
+            return "shot"
+        return "hit" if distance <= reach else None
 
-    def should_shoot(self, player_x, player_y):
-        if self.shoot_range <= 0 or self.shoot_timer > 0:
+    def check_slide_escape(self, player, start):
+        if (not player.is_sliding or not self.alive or self.shoot_range or self.windup_dodged
+                or getattr(self, 'stun_timer', 0) > 0 or not 0 < self.windup_left <= PERFECT_DODGE_WINDOW):
             return False
-        dx = player_x - self.x
-        dy = player_y - self.y
-        dist = math.sqrt(dx * dx + dy * dy)
-        if dist < self.shoot_range:
-            self.shoot_timer = self.shoot_cooldown_max
+        reach = self.strike_radius + player.size
+        if math.hypot(start[0]-self.x, start[1]-self.y) <= reach < math.hypot(player.x-self.x, player.y-self.y):
+            self.windup_dodged = True
             return True
         return False
+
+    def draw_windup(self, screen, camera):
+        if not self.alive or self.windup_left <= 0:
+            return
+        x, y = map(int, camera.apply(self.x, self.y))
+        progress = 1 - self.windup_left / self.windup_duration
+        color = YELLOW if progress < 0.65 else ORANGE
+        if not self.shoot_range and self.windup_left <= PERFECT_DODGE_WINDOW:
+            color = WHITE
+        radius = self.size + 5 if self.shoot_range else self.strike_radius
+        pygame.draw.circle(screen, color, (x, y), radius, 2)
+        pygame.draw.circle(screen, color, (x, y), int(radius * progress), 2)
+        if not self.shoot_range:
+            return
+        for offset in self.shot_offsets:
+            angle = self.aim_angle + offset
+            tip = (x + math.cos(angle) * self.shoot_range, y + math.sin(angle) * self.shoot_range)
+            pygame.draw.line(screen, color, (x, y), tip, 2)
 
     def should_revive(self):
         """Некромант: пора ли воскрешать?"""
@@ -279,6 +327,23 @@ class Enemy:
             pygame.draw.rect(screen, RED, (bar_x, bar_y, int(bar_w * hp_ratio), bar_h))
 
     # ──── ОТРИСОВКА ТИПОВ ────
+
+    def _draw_skirmisher(self, screen, sx, sy, color):
+        points = [(sx - 14, sy - 9), (sx, sy - 4), (sx + 14, sy - 9), (sx, sy + 13)]
+        pygame.draw.polygon(screen, color, points)
+        pygame.draw.polygon(screen, self.outline_color, points, 2)
+
+    def _draw_crusher(self, screen, sx, sy, color):
+        body = pygame.Rect(sx - 18, sy - 18, 36, 36)
+        pygame.draw.rect(screen, color, body, border_radius=6)
+        pygame.draw.rect(screen, self.outline_color, body, 3, border_radius=6)
+        pygame.draw.line(screen, GOLD, (sx - 9, sy - 4), (sx + 9, sy - 4), 4)
+
+    def _draw_prism(self, screen, sx, sy, color):
+        points = [(sx, sy - 18), (sx + 14, sy), (sx, sy + 18), (sx - 14, sy)]
+        pygame.draw.polygon(screen, color, points)
+        pygame.draw.polygon(screen, self.outline_color, points, 2)
+        pygame.draw.circle(screen, WHITE, (sx, sy), 4)
 
     def _draw_zombie(self, screen, sx, sy, color):
         pygame.draw.circle(screen, color, (sx, sy), self.size)
@@ -466,6 +531,8 @@ class Boss(Enemy):
         self.speed = BOSS_SPEED
         self.damage = BOSS_DAMAGE * difficulty_multiplier
         self.size = BOSS_SIZE
+        self.strike_radius = BOSS_SIZE + 20
+        self.windup_duration = 0.75
         self.color = BOSS_COLOR
         self.outline_color = BOSS_OUTLINE_COLOR
         self.xp_reward = BOSS_XP
@@ -486,14 +553,13 @@ class Boss(Enemy):
         self.arena_center_x = px
         self.arena_center_y = py
 
-    def update(self, dt, player_x, player_y, game_messages=None):
-        self.anim_timer += dt
-        super().update(dt, player_x, player_y)
+    def update(self, dt, player_x, player_y, enemies_list, game_messages=None):
+        super().update(dt, player_x, player_y, enemies_list)
 
         if self.hp / self.max_hp < 0.5 and not self.phase_2_triggered:
             self.phase_2_triggered = True
             self.is_enraged = True
-            self.speed = BOSS_SPEED * 1.3
+            self.base_speed = BOSS_SPEED * 1.3
             self.color = CRIMSON
             if game_messages is not None:
                 game_messages.append(t("BOSS_PHASE_2"))
@@ -621,9 +687,9 @@ class EnemyProjectile:
         self.lifetime = ENEMY_PROJECTILE_LIFETIME
         self.alive = True
 
-    def update(self, dt):
-        self.x += self.dir_x * self.speed * dt
-        self.y += self.dir_y * self.speed * dt
+    def update(self, dt, speed_scale=1.0):
+        self.x += self.dir_x * self.speed * dt * speed_scale
+        self.y += self.dir_y * self.speed * dt * speed_scale
         self.lifetime -= dt
         if self.lifetime <= 0:
             self.alive = False
