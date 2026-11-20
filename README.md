@@ -1,33 +1,58 @@
-# 🧟 pygame-slide-survivors
+![Slide Survivors — Slide. Strike. Survive.](assets/banners/slide-survivors-en.svg)
 
-Survivors-style arena roguelike on Pygame. Pick a hero, survive the hordes, level up, repeat.
+**English** · [Русский](README.ru.md)
 
-## Features
+# Slide Survivors
 
-- **Heroes** — pick your fighter from the `HEROES` registry
-- **Enemy waves** with bosses, projectiles and spawners
-- **Upgrades** between waves, XP orbs and dropped items
-- Particles, camera system, world & UI
-- Local **highscores**
-- EN/RU localization
+A top-down arena roguelike built with Pygame. Your hero punches automatically; you aim the fists and steer the slide. Slip past a crab just before its attack lands, turn back with a charged cleave, and collect the XP before the next wave reaches you.
 
-## Combat tips
+## Start a run
 
-- Leave the warning circle before the inner ring fills. Against a shooter, sidestep the aim line: it won’t track you during the wind-up. Exploders also leave a short fuse on death.
-- **Perfect dodge** (all heroes): slide fully out of a melee ring when it flashes white in the last 0.16 seconds. Your glowing fists signal one charged cleave on the next swing, even without the Cleave upgrade. Charges do not stack.
-- **Ice Trail** lays slippery ground only while sliding. Enemies keep their incoming heading there, so double back after they step onto it. Ice lasts 2/3/4 seconds at levels 1/2/3.
-- Three aura cards offer different ways to deal with a crowd: **Repulsion** pushes nearby enemies every 2.5 seconds, **Siphon** drains the closest foe every 2 seconds and heals for a quarter of the HP taken, and **Stasis Field** slows nearby enemy shots by 20% per level.
-- Watch for **Skirmishers** weaving in after 0:20, **Crushers** winding up wide slams after 1:15, and **Prisms** firing three-way volleys after 2:15.
-- **Cleave** turns every fourth punch into a longer circular sweep with no target cap. **Second Wind** heals on the first hit of each dash attack.
-- A bomb adds **5 seconds** to the time left on an active kill streak, even on an empty screen. A later kill won’t shorten that extra time.
-
-## Run
+From the project directory, with Python 3 and pip installed:
 
 ```bash
 python -m pip install -r requirements.txt
 python main.py
 ```
 
-The [bundled fonts and their licenses](assets/fonts/README.md) ship with the game, including Cyrillic, symbols, and monochrome Noto Emoji. No font downloads or system font configuration are needed at runtime.
+Choose English or Russian on first launch. Equip **Slider**, **Brawler**, **Spark**, or **Shadow** in **Heroes**, or cycle through them using the arrows on the lobby card. Choosing a hero doesn't start the clock: press **1 — Play** when you're ready. Fonts for both languages, symbols, and monochrome emoji ship with the game; no system font setup is needed.
 
-Choose a fighter in **Heroes**, then start the run with **Play**. Use the arrow keys and Enter or click a menu button. **Pause → Surrender** finishes the run and submits its score to the same local leaderboard as a defeat.
+## Controls
+
+| Action | Input |
+| --- | --- |
+| Move and aim | WASD or arrow keys to move; mouse to aim |
+| Slide | Hold Space or Shift; release to stop |
+| Dash attack | Left-click just after a slide |
+| Ultimate | Q or right-click when charged |
+| Choose an upgrade | 1–3, click a card, or use Left/Right and Enter |
+| Pause | Esc or P |
+
+In numbered menus, the matching digit works like a click (top row or keypad). In Settings it changes the value on that row. **Pause → Surrender** ends the run and submits the result to the same local leaderboard as a defeat.
+
+## Read the arena
+
+- **Watch the warning, not just the enemy.** Step out of a melee ring before it fills. For a perfect dodge, *slide* across its edge when it flashes white in the final 0.16 seconds. Your fists glow: the next swing sweeps all around you. Shooters show their aim line before firing; step sideways rather than backing straight away.
+- **Punch combos and kill streaks are different.** A punch advances the fist series only on contact, once even if it hits a crowd. The Cleave upgrade makes every fourth landed punch a sweep. A kill streak gives bonus XP; picking up a bomb adds **5 seconds** to the time remaining on an active streak, even when the screen is empty.
+- **Build around how you move.** XP orbs earn levels and upgrade cards. Ice Trail makes pursuers keep their heading on slippery ground: turn back once they're on it. Repulsion pushes crowds away, Siphon drains the closest foe, and Stasis slows incoming shots. Bosses bring their own arena walls.
+- **Pickups aren't permanent upgrades.** Alongside heals, magnets, bombs and speed boosts, enemies can drop **12 timed pickups**. Ember Pepper boosts punches, Ruby Fang lets hits heal you, and Comet Wax speeds up slides. These twelve effects last **8–12 seconds** of play. Different bonuses coexist; another copy refreshes its timer instead of doubling its strength. Watch the icons above the XP bar.
+
+## Field guide
+
+Ten biomes share one map. Each has its own ground palette, two signature floor decorations, and one native species. The order changes between runs, but the scenery stays put when you revisit a region. A shell on the beach is scenery, not loot.
+
+| Biome | Resident | Biome | Resident |
+| --- | --- | --- | --- |
+| Wildflower Meadow | Clover Moth | Basalt Wastes | Cinder Slug |
+| Amber Dunes | Sand Scorpion | Crystal Caverns | Echo Bat |
+| Glacial Shelf | Rime Lynx | Tide Coast | Tide Crab |
+| Reed Marsh | Reed Toad | Old Foundry | Gear Mite |
+| Crimson Grove | Thorn Stag | Forgotten Ruins | Rune Wisp |
+
+A resident dies if it crosses its biome boundary, even if you pushed it. That escape buys you breathing room, but **no kill credit, XP, combo, corpse, or item**. Ordinary enemies and bosses can follow you across the border.
+
+## Development
+
+- Run the tests: `python -m unittest discover -s tests`.
+- For the optional trainer, run `python cheat_launcher.py` **instead of** `main.py`, then press F1 to open its overlay.
+- The game code is [MIT-licensed](LICENSE). The [bundled fonts](assets/fonts/README.md) have their own licenses.

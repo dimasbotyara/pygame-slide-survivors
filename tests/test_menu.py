@@ -13,7 +13,7 @@ from highscores import load_highscores
 from main import Game
 from translations import set_language, t
 from typography import face
-from ui import hero_rect, menu_rect, pause_rect, upgrade_rect, word_lines
+from ui import hero_arrow_rect, hero_rect, menu_rect, pause_rect, upgrade_rect, word_lines
 
 
 def press(key):
@@ -40,6 +40,36 @@ class MenuTests(unittest.TestCase):
         self.assertEqual(g.selected_hero_index, 2)
         g.update_menu([press(pygame.K_UP), press(pygame.K_RETURN)])
         self.assertEqual((g.state, g.player.hero_id), ('playing', 'spark'))
+
+    def test_digits_activate_numbered_rows_and_toggle_settings(self):
+        g = self.game
+        g.update_menu([press(pygame.K_4)])
+        self.assertEqual(g.state, 'settings')
+        with patch.object(g.settings_manager, 'save'):
+            before = g.settings_manager.get('screen_shake')
+            g.update_settings([press(pygame.K_KP2)])
+            self.assertEqual(g.settings_manager.get('screen_shake'), not before)
+            g.update_settings([press(pygame.K_5)])
+        self.assertEqual(g.state, 'menu')
+        for digit, state in [(2, 'hero_select'), (3, 'achievements'), (5, 'controls'), (6, 'highscores')]:
+            g.state = 'menu'
+            g.update_menu([press(getattr(pygame, f'K_{digit}'))])
+            self.assertEqual(g.state, state)
+        g.state = 'game_over'
+        g.update_game_over([press(pygame.K_2)])
+        self.assertEqual(g.state, 'menu')
+        g.update_menu([press(pygame.K_7)])
+        self.assertFalse(g.running)
+
+    def test_lobby_arrows_equip_without_starting(self):
+        g = self.game
+        g.update_menu([click(hero_arrow_rect(-1))])
+        self.assertEqual(g.selected_hero_index, 3)
+        g.update_menu([click(hero_arrow_rect(1)), press(pygame.K_RIGHT)])
+        self.assertEqual((g.selected_hero_index, g.state), (1, 'menu'))
+        self.assertIsNone(g.player)
+        g.update_menu([press(pygame.K_KP1)])
+        self.assertEqual(g.player.hero_id, 'brawler')
 
     def test_surrender_submits_run_once(self):
         g = self.game

@@ -5,6 +5,7 @@ import math
 import random as rng_module
 from settings import *
 from heroes import get_hero_data
+from consumables import TONICS, TONIC_BY_STAT
 
 
 
@@ -171,6 +172,9 @@ class Player:
         self.fist_attack_duration = 0.12
         self.fist_hit_enemies = []
         self.fist_which_hand = 0
+        self.swing_combo_index = 0
+        self.swing_cleave = False
+        self.slam_triggered = False
         self.fist_total_hits = 0  # общий счётчик ударов для мега-удара
         self.fist_is_mega = False  # текущий удар — мега?
 
@@ -207,6 +211,7 @@ class Player:
         # Временные
         self.speed_boost_timer = 0.0
         self.speed_boost_multiplier = 1.0
+        self.tonic_timers = {}
 
         self.level_up_rings = []
         self.color = self.player_color
@@ -221,6 +226,16 @@ class Player:
     # ================================================================
     # СТАТЫ
     # ================================================================
+    def effective_stat(self, stat):
+        item = TONIC_BY_STAT.get(stat)
+        return self.stats[stat] + (TONICS[item].bonus if item in self.tonic_timers else 0)
+
+    def update_tonics(self, dt):
+        for item in list(self.tonic_timers):
+            self.tonic_timers[item] -= dt
+            if self.tonic_timers[item] <= 0:
+                del self.tonic_timers[item]
+
     def get_max_hp(self):
         return PLAYER_BASE_HP + self.stats["max_hp"]
 
@@ -234,10 +249,10 @@ class Player:
         return base
 
     def get_xp_radius(self):
-        return XP_PICKUP_RADIUS_BASE * (1 + self.stats["xp_radius"] / 100)
+        return XP_PICKUP_RADIUS_BASE * (1 + self.effective_stat("xp_radius") / 100)
 
     def get_fist_damage(self):
-        base = FIST_BASE_DAMAGE * (1 + self.stats["damage"] / 100)
+        base = FIST_BASE_DAMAGE * (1 + self.effective_stat("damage") / 100)
         # Ярость
         if self.stats["fist_rage"] > 0:
             hp_ratio = self.hp / self.max_hp
@@ -248,7 +263,7 @@ class Player:
         return base
 
     def get_fist_attack_speed(self):
-        base = FIST_BASE_ATTACK_SPEED * (1 + self.stats["attack_speed"] / 100)
+        base = FIST_BASE_ATTACK_SPEED * (1 + self.effective_stat("attack_speed") / 100)
         # Ярость бонус к скорости атаки
         if self.stats["fist_rage"] > 0:
             hp_ratio = self.hp / self.max_hp
@@ -259,16 +274,16 @@ class Player:
         return base
 
     def get_fist_range(self):
-        return FIST_BASE_RANGE * (1 + self.stats["attack_range"] / 100)
+        return FIST_BASE_RANGE * (1 + self.effective_stat("attack_range") / 100)
 
     def get_fist_combo_max(self):
         return FIST_COMBO_HITS + self.stats["fist_combo_hits"]
 
     def get_fist_stun_chance(self):
-        return self.stats["fist_stun_chance"]
+        return self.effective_stat("fist_stun_chance")
 
     def get_fist_lifesteal(self):
-        return self.stats["fist_lifesteal"]
+        return self.effective_stat("fist_lifesteal")
 
     def get_fist_arc(self, combo_index):
         if combo_index < len(FIST_COMBO_ARC):
@@ -302,7 +317,7 @@ class Player:
         return base * FIST_COMBO_RANGE_MULTIPLIERS[-1]
 
     def get_slide_initial_speed(self):
-        return self.get_move_speed() * SLIDE_INITIAL_SPEED_MULTIPLIER * (1 + self.stats["slide_speed"] / 100)
+        return self.get_move_speed() * SLIDE_INITIAL_SPEED_MULTIPLIER * (1 + self.effective_stat("slide_speed") / 100)
 
     def get_slide_duration(self):
         return SLIDE_DURATION * (1 + self.stats["slide_duration"] / 100)
@@ -311,29 +326,29 @@ class Player:
         return SLIDE_COOLDOWN * max(0.1, (1 - self.stats["slide_cooldown"] / 100))
 
     def get_slide_knockback_damage(self):
-        base = SLIDE_BASE_KNOCKBACK_DAMAGE * (1 + self.stats["slide_damage"] / 100)
+        base = SLIDE_BASE_KNOCKBACK_DAMAGE * (1 + self.effective_stat("slide_damage") / 100)
         return base + self.slide_current_speed * SLIDE_SPEED_DAMAGE_MULTIPLIER
 
     def get_slide_knockback_radius(self):
         return SLIDE_KNOCKBACK_RADIUS + self.size + self.stats["slide_knockback_radius"]
 
     def get_slide_turn_speed(self):
-        return SLIDE_TURN_SPEED * (1 + self.stats["slide_turn_speed"] / 100)
+        return SLIDE_TURN_SPEED * (1 + self.effective_stat("slide_turn_speed") / 100)
 
     def get_slide_max_charges(self):
         return 1 + self.stats["slide_charges"]
 
     def get_armor(self):
-        return self.stats["armor"]
+        return self.effective_stat("armor")
 
     def get_crit_chance(self):
-        return self.stats["crit_chance"] + self.stats["luck"]
+        return self.effective_stat("crit_chance") + self.stats["luck"]
 
     def get_crit_multiplier(self):
         return 1.0 + self.stats["crit_multiplier"] / 100
 
     def get_xp_multiplier(self):
-        return 1.0 + self.stats["xp_multiplier"] / 100
+        return 1.0 + self.effective_stat("xp_multiplier") / 100
 
     def get_heal_effectiveness(self):
         return 1.0 + self.stats["heal_effectiveness"] / 100
@@ -359,6 +374,7 @@ class Player:
     # UPDATE
     # ================================================================
     def update(self, dt, keys, mouse_pos, camera):
+        self.update_tonics(dt)
         self.time_alive += dt
         self.body_anim_timer += dt
 
@@ -622,12 +638,15 @@ class Player:
             max_combo = self.get_fist_combo_max()
             current_hit = self.fist_combo_index % max_combo
 
-            self.fist_total_hits += 1
+            self.swing_combo_index = current_hit
+            self.slam_triggered = False
+            next_hit = self.fist_total_hits + 1
+            self.swing_cleave = self.stats["cleave"] > 0 and next_hit % 4 == 0
             self.fist_dodge_cleave = self.dodge_charge
             self.dodge_charge = False
 
             # Мега-удар?
-            self.fist_is_mega = (self.fist_total_hits % FIST_MEGA_HIT_EVERY == 0)
+            self.fist_is_mega = (next_hit % FIST_MEGA_HIT_EVERY == 0)
 
             self.fist_attack_active = True
             self.fist_attack_timer = self.fist_attack_duration
@@ -640,9 +659,6 @@ class Player:
                 self.fist_which_hand = 2
             else:
                 self.fist_which_hand = current_hit % 2
-
-            self.fist_combo_index = (current_hit + 1) % max_combo
-            self.fist_combo_timer = FIST_COMBO_WINDOW
 
             # Волна от удара
             if self.stats["fist_wave"] > 0:
@@ -657,11 +673,19 @@ class Player:
                 )
                 self.fist_waves.append(wave)
 
+    def record_fist_contact(self, enemy):
+        # A sweep may connect with several enemies across multiple frames.
+        if not self.fist_hit_enemies:
+            self.fist_total_hits += 1
+            self.fist_combo_index = (self.swing_combo_index + 1) % self.get_fist_combo_max()
+            self.fist_combo_timer = FIST_COMBO_WINDOW
+        self.fist_hit_enemies.append(enemy)
+
     def get_fist_attack_area(self):
         if not self.fist_attack_active:
             return None
         max_combo = self.get_fist_combo_max()
-        current_hit = (self.fist_combo_index - 1) % max_combo
+        current_hit = self.swing_combo_index
 
         arc = 360 if self.fist_is_mega else self.get_fist_arc(current_hit)
         damage = self.get_fist_damage_for_hit(current_hit)
@@ -669,7 +693,7 @@ class Player:
         knockback = self.get_fist_knockback_for_hit(current_hit)
         is_finisher = self.fist_is_mega or (current_hit == max_combo - 1)
 
-        cleave = self.fist_dodge_cleave or (self.stats["cleave"] > 0 and self.fist_total_hits % 4 == 0)
+        cleave = self.fist_dodge_cleave or self.swing_cleave
         if cleave:
             arc = 360
             attack_range += 24

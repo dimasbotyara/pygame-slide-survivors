@@ -92,7 +92,7 @@ STASIS_RADIUS = 145
 # ============================================================
 COMBO_TIMEOUT = 3.0
 BOMB_COMBO_EXTENSION = 5.0
-EXPLOSION_FUSE = 0.65
+EXPLOSION_FUSE = 0.325
 COMBO_XP_BONUS_PER_STACK = 5
 COMBO_MAX_MULTIPLIER = 500
 
@@ -164,6 +164,7 @@ ENEMY_SPAWN_RATE_BASE = 1.0
 ENEMY_SPAWN_RATE_MAX = 8.0
 ENEMY_DIFFICULTY_SCALE_TIME = 600
 ENEMY_MAX_COUNT = 300
+RESIDENT_SPAWN_CHANCE = 0.25
 
 ENEMY_TYPES = {
     "zombie": {
@@ -180,14 +181,14 @@ ENEMY_TYPES = {
         "hp": 95, "speed": 46, "damage": 19, "size": 19,
         "color": BROWN, "outline_color": GOLD,
         "xp": 28, "weight": 12, "min_time": 75, "knockback_resist": 0.5,
-        "strike_radius": 74, "windup": 0.85,
+        "strike_radius": 74, "windup": 0.425,
     },
     "prism": {
         "hp": 38, "speed": 48, "damage": 10, "size": 15,
         "color": PURPLE, "outline_color": PINK,
         "xp": 32, "weight": 9, "min_time": 135, "knockback_resist": 0.1,
         "shoot_range": 270, "shoot_speed": 205, "shoot_cooldown": 2.8,
-        "shot_offsets": (-0.28, 0, 0.28), "windup": 0.8,
+        "shot_offsets": (-0.28, 0, 0.28), "windup": 0.4,
     },
     "ghoul": {
         "hp": 15, "speed": 140, "damage": 5, "size": 10,
@@ -278,6 +279,7 @@ CHOICES_PER_LEVEL = 3
 DROP_CHANCE_HEAL = 0.05
 DROP_CHANCE_MAGNET = 0.02
 DROP_CHANCE_BOMB = 0.01
+DROP_CHANCE_TONIC = 0.13
 DROP_CHANCE_SPEED_BOOST = 0.03
 HEAL_AMOUNT = 30
 SPEED_BOOST_DURATION = 5.0
@@ -341,14 +343,6 @@ UI_UPGRADE_BOX_HEIGHT = 330
 # КАРТА
 # ============================================================
 TILE_SIZE = 64
-GROUND_COLOR_1 = (40, 45, 40)
-GROUND_COLOR_2 = (45, 50, 45)
-
-# ============================================================
-# ДЕКОРАЦИИ
-# ============================================================
-DECORATION_DENSITY = 0.03
-DECORATION_TYPES = ["grass", "rock", "flower", "mushroom", "bones"]
 
 # ============================================================
 # РЕКОРДЫ

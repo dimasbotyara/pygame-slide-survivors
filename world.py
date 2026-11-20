@@ -4,16 +4,20 @@ import pygame
 import random
 import math
 from settings import *
+from biomes import BIOMES, prop_sprite
 
 
 class Decoration:
     """Декоративный элемент на карте"""
-    def __init__(self, x, y, deco_type):
+    def __init__(self, x, y, deco_type, biome, rng):
         self.x = x
         self.y = y
         self.deco_type = deco_type
-        self.anim_offset = random.random() * 10
-        self.size = random.uniform(0.8, 1.2)
+        self.anim_offset = rng.random() * 10
+        self.size = rng.uniform(0.8, 1.2)
+
+        self.sprite = (prop_sprite(deco_type, biome.ink, rng.choice((2, 2, 3)), rng.choice((True, False)))
+                       if deco_type in biome.props else None)
 
     def draw(self, screen, camera, game_time):
         sx, sy = camera.apply(self.x, self.y)
@@ -22,7 +26,9 @@ class Decoration:
         if sx < -30 or sx > SCREEN_WIDTH + 30 or sy < -30 or sy > SCREEN_HEIGHT + 30:
             return
 
-        if self.deco_type == "grass":
+        if self.sprite is not None:
+            screen.blit(self.sprite, self.sprite.get_rect(midbottom=(sx, sy)))
+        elif self.deco_type == "grass":
             sway = math.sin(game_time * 2 + self.anim_offset) * 3
             h = int(12 * self.size)
             pygame.draw.line(screen, (60, 120, 40),
@@ -119,15 +125,20 @@ class SlideTrail:
 
 class World:
     """Бесконечный мир с декорациями и следами"""
-    def __init__(self):
-        self.tile_surface_1 = pygame.Surface((TILE_SIZE, TILE_SIZE))
-        self.tile_surface_1.fill(GROUND_COLOR_1)
-
-        self.tile_surface_2 = pygame.Surface((TILE_SIZE, TILE_SIZE))
-        self.tile_surface_2.fill(GROUND_COLOR_2)
-
-        self._add_tile_details(self.tile_surface_1, GROUND_COLOR_1)
-        self._add_tile_details(self.tile_surface_2, GROUND_COLOR_2)
+    def __init__(self, seed=None):
+        self.seed = random.randrange(2**31) if seed is None else seed
+        self.biomes = list(BIOMES)
+        random.Random(self.seed).shuffle(self.biomes)
+        self.tiles = {}
+        for biome in self.biomes:
+            pair = []
+            for shade in (0, 4):
+                color = tuple(c + shade for c in biome.ground)
+                tile = pygame.Surface((TILE_SIZE, TILE_SIZE))
+                tile.fill(color)
+                self._add_tile_details(tile, color)
+                pair.append(tile)
+            self.tiles[biome.key] = pair
 
         # Кэш декораций по чанкам
         self.decoration_cache = {}
@@ -153,22 +164,26 @@ class World:
                         if rng.random() < 0.6:
                             surface.set_at((nx, ny), detail_color)
 
+    def biome_for_chunk(self, cx, cy):
+        # Regions span three chunks per side. Any row visits all ten biomes.
+        rx, ry = (cx + 1) // 3, (cy + 1) // 3
+        return self.biomes[(rx + 3 * ry) % len(self.biomes)]
+
+    def biome_at(self, x, y):
+        return self.biome_for_chunk(math.floor(x / self.chunk_size), math.floor(y / self.chunk_size))
+
     def get_decorations_for_chunk(self, cx, cy):
         """Получить/сгенерировать декорации для чанка"""
         key = (cx, cy)
         if key not in self.decoration_cache:
-            rng = random.Random(hash(key) + 42)
+            rng = random.Random(hash((self.seed, cx, cy)))
+            biome = self.biome_for_chunk(cx, cy)
             decos = []
-            for _ in range(int(self.chunk_size * self.chunk_size * DECORATION_DENSITY / 1000)):
-                if rng.random() < DECORATION_DENSITY * 10:
-                    dx = rng.randint(0, self.chunk_size)
-                    dy = rng.randint(0, self.chunk_size)
-                    deco_type = rng.choice(DECORATION_TYPES)
-                    decos.append(Decoration(
-                        cx * self.chunk_size + dx,
-                        cy * self.chunk_size + dy,
-                        deco_type
-                    ))
+            for _ in range(rng.randint(14, 22)):
+                dx, dy = rng.randrange(self.chunk_size), rng.randrange(self.chunk_size)
+                kind = rng.choice(biome.props if rng.random() < 0.65 else biome.scatter)
+                decos.append(Decoration(cx*self.chunk_size + dx, cy*self.chunk_size + dy,
+                                        kind, biome, rng))
             self.decoration_cache[key] = decos
 
             # Очистка кэша (хранить максимум 50 чанков)
@@ -203,11 +218,8 @@ class World:
 
         for ty in range(start_y, end_y):
             for tx in range(start_x, end_x):
-                if (tx + ty) % 2 == 0:
-                    tile = self.tile_surface_1
-                else:
-                    tile = self.tile_surface_2
-
+                biome = self.biome_for_chunk(tx*TILE_SIZE // self.chunk_size, ty*TILE_SIZE // self.chunk_size)
+                tile = self.tiles[biome.key][(tx + ty) % 2]
                 screen_x = tx * TILE_SIZE - camera.offset_x
                 screen_y = ty * TILE_SIZE - camera.offset_y
                 screen.blit(tile, (int(screen_x), int(screen_y)))
@@ -217,10 +229,10 @@ class World:
             trail.draw(screen, camera)
 
         # Декорации
-        chunk_start_x = int((camera.offset_x - 100) // self.chunk_size) - 1
-        chunk_start_y = int((camera.offset_y - 100) // self.chunk_size) - 1
-        chunk_end_x = int((camera.offset_x + SCREEN_WIDTH + 100) // self.chunk_size) + 1
-        chunk_end_y = int((camera.offset_y + SCREEN_HEIGHT + 100) // self.chunk_size) + 1
+        chunk_start_x = int((camera.offset_x - 100) // self.chunk_size)
+        chunk_start_y = int((camera.offset_y - 100) // self.chunk_size)
+        chunk_end_x = int((camera.offset_x + SCREEN_WIDTH + 100) // self.chunk_size)
+        chunk_end_y = int((camera.offset_y + SCREEN_HEIGHT + 100) // self.chunk_size)
 
         for cy in range(chunk_start_y, chunk_end_y + 1):
             for cx in range(chunk_start_x, chunk_end_x + 1):

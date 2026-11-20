@@ -6,6 +6,7 @@ import random
 from settings import *
 from translations import t
 from typography import face
+from wildlife import RESIDENTS, RESIDENT_BY_BIOME, resident_sprite
 
 
 
@@ -15,7 +16,12 @@ class Enemy:
         self.y = float(y)
         self.enemy_type = enemy_type
 
-        data = ENEMY_TYPES[enemy_type]
+        resident = RESIDENTS.get(enemy_type)
+        self.home_biome = resident.biome if resident else None
+        self.archetype = resident.archetype if resident else enemy_type
+        data = ENEMY_TYPES[self.archetype]
+        if resident:
+            data = dict(data, **resident.traits, color=resident.color)
 
         self.max_hp = data["hp"] * difficulty_multiplier
         self.hp = self.max_hp
@@ -36,7 +42,7 @@ class Enemy:
         self.strike_radius = data.get("strike_radius", self.size + 8)
         self.windup_dodged = False
         self.on_ice = False
-        self.windup_duration = data.get("windup", 0.55 if self.shoot_range else 0.4)
+        self.windup_duration = data.get("windup", 0.275 if self.shoot_range else 0.2)
         self.windup_left = 0.0
         self.aim_angle = 0.0
 
@@ -73,7 +79,7 @@ class Enemy:
         self.alive = True
         self.hit_cooldown = 0.0
         self.flash_timer = 0.0
-        self.is_ghost = (enemy_type == "ghost")
+        self.is_ghost = (self.archetype == "ghost")
         self.is_boss = False
         self.no_despawn = False  # не деспавнить
 
@@ -147,7 +153,7 @@ class Enemy:
 
         self.speed = current_speed
 
-        if self.enemy_type == "skirmisher" and dist > self.strike_radius:
+        if self.archetype == "skirmisher" and dist > self.strike_radius:
             # Weave across the approach rather than running straight at the hero.
             angle = math.sin(self.anim_timer * 3) * 0.95
             c, s = math.cos(angle), math.sin(angle)
@@ -311,7 +317,11 @@ class Enemy:
 
         # Рисуем по типу
         draw_method = getattr(self, f"_draw_{self.enemy_type}", None)
-        if draw_method:
+        if self.home_biome:
+            sprite = resident_sprite(self.enemy_type, self.size, self.flash_timer > 0)
+            bob = int(math.sin(self.anim_timer * 6) * 2)
+            screen.blit(sprite, sprite.get_rect(center=(sx, sy + bob)))
+        elif draw_method:
             draw_method(screen, sx, sy, color)
         else:
             pygame.draw.circle(screen, color, (sx, sy), self.size)
@@ -533,7 +543,7 @@ class Boss(Enemy):
         self.damage = BOSS_DAMAGE * difficulty_multiplier
         self.size = BOSS_SIZE
         self.strike_radius = BOSS_SIZE + 20
-        self.windup_duration = 0.75
+        self.windup_duration = 0.375
         self.color = BOSS_COLOR
         self.outline_color = BOSS_OUTLINE_COLOR
         self.xp_reward = BOSS_XP
@@ -709,7 +719,8 @@ class EnemyProjectile:
 
 
 class EnemySpawner:
-    def __init__(self):
+    def __init__(self, world=None):
+        self.world = world
         self.spawn_timer = 0.0
         self.boss_timer = 0.0
         self.game_time = 0.0
@@ -759,6 +770,15 @@ class EnemySpawner:
         return None  # возврат босса если нужен
 
     def spawn_enemy(self, player_x, player_y):
+        angle = random.random() * math.pi * 2
+        dist = random.uniform(ENEMY_SPAWN_RADIUS_MIN, ENEMY_SPAWN_RADIUS_MAX)
+        spawn_x = player_x + math.cos(angle) * dist
+        spawn_y = player_y + math.sin(angle) * dist
+
+        if self.world is not None and random.random() < RESIDENT_SPAWN_CHANCE:
+            habitat = self.world.biome_at(spawn_x, spawn_y).key
+            return Enemy(spawn_x, spawn_y, RESIDENT_BY_BIOME[habitat], self.difficulty_multiplier)
+
         available_types = []
         total_weight = 0
         for etype, data in ENEMY_TYPES.items():
@@ -777,11 +797,6 @@ class EnemySpawner:
             if roll <= cumulative:
                 chosen_type = etype
                 break
-
-        angle = random.random() * math.pi * 2
-        dist = random.uniform(ENEMY_SPAWN_RADIUS_MIN, ENEMY_SPAWN_RADIUS_MAX)
-        spawn_x = player_x + math.cos(angle) * dist
-        spawn_y = player_y + math.sin(angle) * dist
 
         return Enemy(spawn_x, spawn_y, chosen_type, self.difficulty_multiplier)
 

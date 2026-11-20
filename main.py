@@ -14,8 +14,10 @@ from upgrades import UpgradeManager
 from particles import ParticleManager, Particle
 from items import XPOrb, DroppedItem, roll_drop
 from world import World
+from wildlife import RESIDENT_BY_BIOME
+from consumables import TONICS
 from ui import (UI, menu_inputs, menu_rect, pause_rect, hero_rect, upgrade_rect,
-                language_rect, settings_rect, result_rect)
+                language_rect, settings_rect, result_rect, hero_arrow_rect)
 from highscores import add_highscore
 from settings_manager import SettingsManager
 from translations import t
@@ -80,10 +82,6 @@ class Game:
 
         # Следы скольжения
         self.slide_trail_timer = 0.0
-
-        # Трекинг ground slam (один раз за удар)
-        self.ground_slam_done_this_attack = False
-        self.last_fist_attack_id = 0
 
     # ================================================================
     # ГЛАВНЫЙ ЦИКЛ
@@ -152,6 +150,7 @@ class Game:
         self.camera = Camera(SCREEN_WIDTH, SCREEN_HEIGHT)
         self.camera.shake_enabled = self.settings_manager.get("screen_shake", True)
         self.world = World()
+        self.biome_key = None
         self.ice_trail = IceTrail()
         self.pulse_auras = PulseAuras()
         self.enemies = []
@@ -159,7 +158,7 @@ class Game:
         self.pending_explosions = []
         self.xp_orbs = []
         self.dropped_items = []
-        self.spawner = EnemySpawner()
+        self.spawner = EnemySpawner(self.world)
         self.upgrade_manager = UpgradeManager()
         self.particle_manager = ParticleManager()
         self.particle_manager.damage_numbers_enabled = self.settings_manager.get("damage_numbers", True)
@@ -169,8 +168,6 @@ class Game:
         self.corpse_positions = []
         self.slide_trail_timer = 0.0
         self.new_record_pos = -1
-        self.ground_slam_done_this_attack = False
-        self.last_fist_attack_id = 0
         self.state = "playing"
 
     # ================================================================
@@ -193,6 +190,7 @@ class Game:
                 self.settings_manager.set("first_launch", False)
                 self.state = "menu"
                 self.menu_selection = 0
+                return
 
     def draw_language_select(self):
         self.ui.draw_language_select_screen(self.screen, self.lang_selection)
@@ -240,12 +238,16 @@ class Game:
     # ================================================================
     def update_menu(self, events):
         rects = [menu_rect(i) for i in range(7)]
-        for hovered, key in menu_inputs(events, rects):
+        arrows = [(hero_arrow_rect(-1), pygame.K_LEFT), (hero_arrow_rect(1), pygame.K_RIGHT)]
+        for hovered, key in menu_inputs(events, rects, extra_buttons=arrows):
             if hovered is not None:
                 self.menu_selection = hovered
             if key is None:
                 continue
-            if key in (pygame.K_UP, pygame.K_w):
+            if key in (pygame.K_LEFT, pygame.K_RIGHT):
+                step = 1 if key == pygame.K_RIGHT else -1
+                self.selected_hero_index = (self.selected_hero_index + step) % len(HERO_KEYS)
+            elif key in (pygame.K_UP, pygame.K_w):
                 self.menu_selection = (self.menu_selection - 1) % 7
             elif key in (pygame.K_DOWN, pygame.K_s):
                 self.menu_selection = (self.menu_selection + 1) % 7
@@ -284,7 +286,8 @@ class Game:
                 continue
             if key == pygame.K_ESCAPE:
                 self.settings_manager.save()
-                self.state = getattr(self, "settings_previous_state", "menu")
+                self.state = self.settings_previous_state
+                return
             elif key in (pygame.K_UP, pygame.K_w):
                 self.settings_selection = (self.settings_selection - 1) % 5
             elif key in (pygame.K_DOWN, pygame.K_s):
@@ -309,7 +312,8 @@ class Game:
                     self.settings_manager.set("minimap", not cur)
                 elif self.settings_selection == 4:
                     self.settings_manager.save()
-                    self.state = getattr(self, "settings_previous_state", "menu")
+                    self.state = self.settings_previous_state
+                    return
 
     def draw_settings(self):
         self.ui.draw_settings_screen(self.screen, self.settings_selection, self.settings_manager)
@@ -321,7 +325,7 @@ class Game:
         for event in events:
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
-                    self.state = getattr(self, "settings_previous_state", "menu")
+                    self.state = "menu"
 
     def draw_controls(self):
         self.ui.draw_controls_screen(self.screen)
@@ -394,6 +398,7 @@ class Game:
                 elif self.game_over_selection == 1:
                     self.state = "menu"
                     self.menu_selection = 0
+                return
 
     def draw_game_over(self):
         self.draw_playing()
@@ -419,15 +424,6 @@ class Game:
                 um.selected_index = (um.selected_index + 1) % len(um.choices)
             elif key == pygame.K_RETURN:
                 self._apply_upgrade_choice(um.selected_index)
-                return
-            elif key == pygame.K_1 and len(um.choices) >= 1:
-                self._apply_upgrade_choice(0)
-                return
-            elif key == pygame.K_2 and len(um.choices) >= 2:
-                self._apply_upgrade_choice(1)
-                return
-            elif key == pygame.K_3 and len(um.choices) >= 3:
-                self._apply_upgrade_choice(2)
                 return
 
     def _apply_upgrade_choice(self, index):
@@ -525,6 +521,11 @@ class Game:
 
         # Обновить мир (следы, декорации)
         self.world.update(dt)
+        biome = self.world.biome_at(self.player.x, self.player.y)
+        if biome.key != self.biome_key:
+            self.biome_key = biome.key
+            resident_name = t('MOB_' + RESIDENT_BY_BIOME[biome.key])
+            self.particle_manager.add_message(t('HABITAT_ENTRY', t('BIOME_' + biome.key), resident_name), CYAN)
 
         # Спавн врагов
         self.game_messages.clear()
@@ -682,10 +683,19 @@ class Game:
     # ================================================================
     # ОБНОВЛЕНИЕ ВРАГОВ
     # ================================================================
+    def check_habitat(self, enemy):
+        if enemy.home_biome and self.world.biome_at(enemy.x, enemy.y).key != enemy.home_biome:
+            # Environmental removal: no kill callbacks, corpse, fuse, combo or loot.
+            enemy.alive = False
+            enemy.hp = 0
+            self.particle_manager.spawn_death_particles(enemy.x, enemy.y, enemy.color, count=5)
+            return False
+        return True
+
     def update_enemies(self, dt):
         """Обновить всех врагов"""
         for enemy in self.enemies:
-            if not enemy.alive:
+            if not enemy.alive or not self.check_habitat(enemy):
                 continue
 
             # Стан — враг не двигается и не атакует
@@ -701,6 +711,7 @@ class Game:
 
             enemy.on_ice = bool(self.ice_trail.patches) and self.ice_trail.covers(enemy)
             enemy.update(dt, self.player.x, self.player.y, self.enemies)
+            self.check_habitat(enemy)
 
         # Удалить мёртвых
         self.enemies = [e for e in self.enemies if e.alive]
@@ -870,12 +881,6 @@ class Game:
         if attack is None:
             return
 
-        # Трекинг для ground slam (один раз за удар)
-        attack_id = self.player.fist_total_hits
-        if attack_id != self.last_fist_attack_id:
-            self.last_fist_attack_id = attack_id
-            self.ground_slam_done_this_attack = False
-
         attack_x = attack["x"]
         attack_y = attack["y"]
         attack_range = attack["range"]
@@ -947,7 +952,7 @@ class Game:
                 source="fist"
             )
 
-            self.player.fist_hit_enemies.append(enemy)
+            self.player.record_fist_contact(enemy)
             targets_hit += 1
 
             # Тряска камеры для особых ударов
@@ -1023,14 +1028,9 @@ class Game:
             return
         if not attack["is_finisher"]:
             return
-        if self.ground_slam_done_this_attack:
+        if self.player.slam_triggered or not self.player.fist_hit_enemies:
             return
-
-        # Только в начале удара (первый кадр)
-        if self.player.fist_attack_timer < self.player.fist_attack_duration * 0.8:
-            return
-
-        self.ground_slam_done_this_attack = True
+        self.player.slam_triggered = True
 
         slam_level = self.player.stats["fist_ground_slam"]
         slam_radius = GROUND_SLAM_RADIUS + slam_level * 25
@@ -1514,7 +1514,11 @@ class Game:
 
     def apply_item_effect(self, item_type):
         """Применить эффект подобранного предмета"""
-        if item_type == "heal":
+        if item_type in TONICS:
+            tonic = TONICS[item_type]
+            self.player.tonic_timers[item_type] = tonic.seconds
+            self.particle_manager.add_message(t('TONIC_' + item_type, tonic.bonus, tonic.seconds), tonic.color)
+        elif item_type == "heal":
             heal_amount = HEAL_AMOUNT * self.player.get_heal_effectiveness()
             self.player.heal(heal_amount)
             self.particle_manager.spawn_heal_particles(
