@@ -14,6 +14,7 @@ from upgrades import UpgradeManager
 from particles import ParticleManager, Particle
 from items import XPOrb, DroppedItem, roll_drop
 from world import World
+from spatial import EnemyGrid
 from consumables import TONICS
 from ui import (UI, menu_inputs, menu_rect, pause_rect, hero_rect, upgrade_rect,
                 language_rect, settings_rect, result_rect, hero_arrow_rect)
@@ -25,6 +26,7 @@ from ui import NUMBER_KEYS, settings_tab_rect
 from translations import t
 from heroes import HEROES, HERO_KEYS
 from achievements import AchievementManager
+from bestiary import Bestiary, guide_rect
 
 
 
@@ -54,6 +56,7 @@ class Game:
             self.state = "menu"
 
         self.selected_hero_index = 0
+        self.bestiary = None
         self.hero_cursor = 0
         self.surrendered = False
         self.lang_selection = 0
@@ -99,7 +102,7 @@ class Game:
             dt = min(dt, 0.05)  # защита от скачков
 
             previous_state = self.state
-            previous_frame = self.screen.copy()
+            previous_frame = self.transition_snapshot()
             events = self.prepare_events(pygame.event.get())
             for event in events:
                 if event.type == pygame.QUIT:
@@ -115,6 +118,9 @@ class Game:
             elif self.state == "hero_select":
                 self.update_hero_select(events)
                 self.draw_hero_select()
+            elif self.state == "bestiary":
+                self.update_bestiary(events)
+                self.draw_bestiary()
             elif self.state == "achievements":
                 self.update_achievements(events)
                 self.draw_achievements()
@@ -143,7 +149,7 @@ class Game:
                 self.update_game_over(events)
                 self.draw_game_over()
 
-            if self.state != previous_state and (self.state == "menu" or previous_state == "menu"):
+            if previous_frame is not None and self.state != previous_state and (self.state == "menu" or previous_state == "menu"):
                 self.ui.begin_transition(previous_frame)
             if self.settings_manager.get("menu_animations"):
                 self.ui.draw_transition(self.screen)
@@ -151,6 +157,11 @@ class Game:
 
         pygame.quit()
         sys.exit()
+
+    def transition_snapshot(self):
+        if self.settings_manager.get('menu_animations') and self.state not in ('playing', 'upgrading'):
+            return self.screen.copy()
+        return None
 
     def prepare_events(self, events):
         for event in events:
@@ -173,6 +184,7 @@ class Game:
         cfg = self.settings_manager
         if self.camera:
             self.camera.culling_enabled = cfg.get("view_culling")
+            self.camera.entity_shadows = cfg.get("entity_shadows")
             self.camera.shake_enabled = cfg.get('screen_shake')
             if not self.camera.shake_enabled:
                 self.camera.shake_timer = 0
@@ -206,7 +218,6 @@ class Game:
         self.camera = Camera(SCREEN_WIDTH, SCREEN_HEIGHT)
         self.camera.shake_enabled = self.settings_manager.get("screen_shake", True)
         self.world = World(seed=self.world_seed)
-        self.biome_key = None
         self.ice_trail = IceTrail()
         self.pulse_auras = PulseAuras()
         self.enemies = []
@@ -293,6 +304,13 @@ class Game:
     # ГЛАВНОЕ МЕНЮ
     # ================================================================
     def update_menu(self, events):
+        for event in events:
+            if ((event.type == pygame.KEYDOWN and event.key in (pygame.K_b, pygame.K_8, pygame.K_KP8)) or
+                    (event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and guide_rect().collidepoint(event.pos))):
+                if self.bestiary is None:
+                    self.bestiary = Bestiary()
+                self.state = 'bestiary'
+                return
         rects = [menu_rect(i) for i in range(7)]
         arrows = [(hero_arrow_rect(-1), pygame.K_LEFT), (hero_arrow_rect(1), pygame.K_RIGHT)]
         for hovered, key in menu_inputs(events, rects, extra_buttons=arrows):
@@ -326,6 +344,13 @@ class Game:
                 elif self.menu_selection == 6:
                     self.running = False
                 return
+
+    def update_bestiary(self, events):
+        if self.bestiary.handle(events):
+            self.state = 'menu'
+
+    def draw_bestiary(self):
+        self.bestiary.draw(self.screen, self.ui)
 
     def draw_menu(self):
         self.ui.draw_main_menu(self.screen, self.menu_selection, self.selected_hero_index)
@@ -581,12 +606,6 @@ class Game:
 
         # Обновить мир (следы, декорации)
         self.world.update(dt)
-        biome = self.world.biome_at(self.player.x, self.player.y)
-        if biome.key != self.biome_key:
-            self.biome_key = biome.key
-            if self.settings_manager.get("biome_notifications"):
-                self.particle_manager.add_message(t("BIOME_" + biome.key), CYAN)
-
         # Спавн врагов
         self.game_messages.clear()
         self.spawner.update(dt, self.player.x, self.player.y,
@@ -754,6 +773,7 @@ class Game:
 
     def update_enemies(self, dt):
         """Обновить всех врагов"""
+        neighbors = EnemyGrid(self.enemies)
         for enemy in self.enemies:
             if not enemy.alive or not self.check_habitat(enemy):
                 continue
@@ -770,7 +790,8 @@ class Game:
                 continue
 
             enemy.on_ice = bool(self.ice_trail.patches) and self.ice_trail.covers(enemy)
-            enemy.update(dt, self.player.x, self.player.y, self.enemies)
+            enemy.update(dt, self.player.x, self.player.y, neighbors)
+            neighbors.update(enemy)
             self.check_habitat(enemy)
 
         # Удалить мёртвых

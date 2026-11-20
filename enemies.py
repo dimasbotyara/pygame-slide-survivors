@@ -2,12 +2,20 @@
 
 import pygame
 import math
+from functools import lru_cache
 import random
 from settings import *
 from translations import t
 from typography import face
 from wildlife import RESIDENTS, RESIDENT_BY_BIOME, resident_sprite
 
+
+
+@lru_cache(maxsize=32)
+def shadow_sprite(size):
+    sprite = pygame.Surface((size*2, 6), pygame.SRCALPHA)
+    pygame.draw.ellipse(sprite, (0, 0, 0, 40), sprite.get_rect())
+    return sprite
 
 
 class Enemy:
@@ -189,15 +197,17 @@ class Enemy:
         push_y = 0.0
         count = 0
 
-        for other in enemies_list:
+        candidates = enemies_list.nearby(self) if hasattr(enemies_list, "nearby") else enemies_list
+        for other in candidates:
             if other is self or not other.alive or other.is_ghost:
                 continue
             dx = self.x - other.x
             dy = self.y - other.y
-            dist = math.sqrt(dx * dx + dy * dy)
+            dist_sq = dx * dx + dy * dy
             min_dist = self.size + other.size
 
-            if 0 < dist < min_dist:
+            if 0 < dist_sq < min_dist*min_dist:
+                dist = math.sqrt(dist_sq)
                 overlap = min_dist - dist
                 push_x += (dx / dist) * overlap
                 push_y += (dy / dist) * overlap
@@ -241,6 +251,10 @@ class Enemy:
         self.knockback_vx += force_x * (1 - resist)
         self.knockback_vy += force_y * (1 - resist)
 
+    @property
+    def attack_cooldown(self):
+        return self.shoot_cooldown_max or 0.5
+
     def advance_attack(self, dt, player):
         """Return one impact event; a miss also spends the attack cooldown."""
         if not self.alive or getattr(self, "stun_timer", 0) > 0:
@@ -258,7 +272,7 @@ class Enemy:
         self.windup_left = max(0.0, self.windup_left - dt)
         if self.windup_left > 0:
             return None
-        self.hit_cooldown = self.shoot_cooldown_max or 0.5
+        self.hit_cooldown = self.attack_cooldown
         if self.shoot_range:
             return "shot"
         return "hit" if distance <= reach else None
@@ -311,9 +325,8 @@ class Enemy:
         color = WHITE if self.flash_timer > 0 else self.color
 
         # Тень
-        shadow_s = pygame.Surface((self.size * 2, 6), pygame.SRCALPHA)
-        pygame.draw.ellipse(shadow_s, (0, 0, 0, 40), (0, 0, self.size * 2, 6))
-        screen.blit(shadow_s, (sx - self.size, sy + self.size - 2))
+        if getattr(camera, 'entity_shadows', True):
+            screen.blit(shadow_sprite(self.size), (sx - self.size, sy + self.size - 2))
 
         # Рисуем по типу
         draw_method = getattr(self, f"_draw_{self.enemy_type}", None)
@@ -649,7 +662,7 @@ class Boss(Enemy):
 
         # Имя
         font = face("display", 14)
-        name = font.render("БОСС", True, GOLD)
+        name = font.render(t("MOB_boss"), True, GOLD)
         screen.blit(name, (sx - name.get_width() // 2, bar_y - 18))
 
     def draw_arena(self, screen, camera):

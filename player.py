@@ -903,9 +903,12 @@ class Player:
             pygame.draw.circle(screen, RED, (sx, sy), cr, 3)
 
         # Тень
-        ss = pygame.Surface((self.size * 2 + 4, 8), pygame.SRCALPHA)
-        pygame.draw.ellipse(ss, (0, 0, 0, 60), (0, 0, self.size * 2 + 4, 8))
-        screen.blit(ss, (sx - self.size - 2, sy + self.size - 2))
+        if getattr(camera, 'entity_shadows', True):
+            if getattr(self, '_shadow_size', None) != self.size:
+                self._shadow_size = self.size
+                self._shadow_sprite = pygame.Surface((self.size*2+4, 8), pygame.SRCALPHA)
+                pygame.draw.ellipse(self._shadow_sprite, (0, 0, 0, 60), self._shadow_sprite.get_rect())
+            screen.blit(self._shadow_sprite, (sx-self.size-2, sy+self.size-2))
 
         # Тело
         pygame.draw.circle(screen, color, (sx, sy), self.size)

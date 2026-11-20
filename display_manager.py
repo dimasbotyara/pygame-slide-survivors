@@ -12,6 +12,9 @@ class DisplayManager:
 
     def apply(self):
         size = tuple(self.settings.get('resolution'))
+        if size == (0, 0):
+            desktops = pygame.display.get_desktop_sizes()
+            size = desktops[0] if desktops else (1280, 720)
         fullscreen = self.settings.get('fullscreen')
         try:
             self.window = pygame.display.set_mode(size, pygame.FULLSCREEN if fullscreen else pygame.RESIZABLE)
@@ -22,6 +25,7 @@ class DisplayManager:
             self.window = pygame.display.set_mode((1280, 720), pygame.RESIZABLE)
             self.settings.save()
             self.error = True
+        self.scaled_frame = None
         self.update_viewport()
 
     def update_viewport(self):
@@ -63,11 +67,14 @@ class DisplayManager:
 
     def present(self, canvas):
         self.update_viewport()
-        self.window.fill((5, 8, 13))
+        if self.viewport.size != self.window.get_size():
+            self.window.fill((5, 8, 13))
         if canvas.get_size() == self.viewport.size:
             image = canvas
         else:
             transform = pygame.transform.smoothscale if self.settings.get('smooth_scaling') else pygame.transform.scale
-            image = transform(canvas, self.viewport.size)
+            if self.scaled_frame is None or self.scaled_frame.get_size() != self.viewport.size:
+                self.scaled_frame = pygame.Surface(self.viewport.size).convert()
+            image = transform(canvas, self.viewport.size, self.scaled_frame)
         self.window.blit(image, self.viewport)
         pygame.display.flip()
