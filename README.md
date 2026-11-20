@@ -23,7 +23,7 @@ Choose English or Russian on first launch. Equip **Slider**, **Brawler**, **Spar
 | --- | --- |
 | Move and aim | WASD or arrow keys to move; mouse to aim |
 | Slide | Hold Space or Shift; release to stop |
-| Dash attack | Left-click just after a slide |
+| Dash attack | Left-click just after a slide (no on-screen reminder) |
 | Ultimate | Q or right-click when charged |
 | Choose an upgrade | 1–3, click a card, or use Left/Right and Enter |
 | Pause | Esc or P |
@@ -34,13 +34,13 @@ In numbered menus, the matching digit works like a click (top row or keypad). In
 
 Drag the window edges to resize it, or choose a resolution and fullscreen in **Settings → Display**. **Alt+Enter** toggles fullscreen. The game preserves its 16:9 canvas with letterboxing; clicks, aiming and trainer controls are mapped to the scaled image. Unsupported display modes fall back to a 1280×720 window.
 
-Settings have **32 options across five tabs**, selected with **1–5** (including keypad), **Tab / Shift+Tab**, or mouse:
+Settings have **33 options across five tabs**, selected with **1–5** (including keypad), **Tab / Shift+Tab**, or mouse:
 
 - **Display:** fullscreen, resolution, 30–240 FPS or unlimited, FPS counter, smooth scaling, pause on focus loss.
 - **Effects:** particle density (off to 3×, default 2×), particle budget, camera shake, screen flashes, slide trails and particles, biome decorations, off-screen culling.
 - **Interface:** language, minimap, radar sweep, damage numbers, notifications, run statistics.
 - **Graphics:** terrain detail, biome transition width, terrain shading, decoration density and animation, entity shadows, radar pickup markers.
-- **Camera:** camera smoothing and look-ahead, menu animations, crosshair, notification duration.
+- **Camera:** camera smoothing and look-ahead, menu animations, independent hero switching animation, crosshair, notification duration.
 
 Changes apply immediately and are saved locally. Off-screen culling is **view culling**, not 3D occlusion: it skips rendering invisible objects without stopping their simulation. The particle cap bounds effect counts even in crowded battles. Turning off effects can help on slower PCs. FPS limits are targets, not a guarantee of performance.
 
@@ -92,7 +92,7 @@ A resident dies if it crosses its biome boundary, even if you pushed it. That es
 
 ## Smoother menus and world tools
 
-The lobby hero arrows now slide and fade the portrait and name. The **Heroes** roster shares the lobby palette, highlights your selection, and compares health, movement speed and punch power. Opening and leaving lobby menus uses a short fade transition; controls remain responsive during the animation.
+The lobby hero arrows slide and fade the portrait and name. **Camera → Hero switching animation** is enabled by default and independent of **Menu animations**, so disabling menu transitions does not disable hero switching. The **Heroes** roster shares the lobby palette, highlights your selection, and compares health, movement speed and punch power. Opening and leaving lobby menus uses a short fade transition; controls remain responsive during the animation.
 
 The minimap uses a monochrome radar background and names your current biome above it; it no longer samples terrain colours. Native residents now have an **8.33% spawn chance** (previously 25%); regular enemy spawns fill the difference.
 
