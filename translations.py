@@ -2,6 +2,12 @@
 
 TRANSLATIONS = {
     "ru": {
+        "ACTIVE_FIGHTER": "ВЫБРАННЫЙ ГЕРОЙ",
+        "PAUSE_SURRENDER": "Сдаться · записать результат",
+        "RUN_COMPLETE": "ЗАБЕГ ЗАВЕРШЁН",
+        "LOBBY": "ЗАЛ АРЕНЫ",
+        "ULT_LABEL": "УЛЬТИМЕЙТ",
+
         "MSG_PERFECT_DODGE": "Идеальный уворот! Кулаки заряжены",
         "CTRL_PERFECT_DODGE": "Белое кольцо: выскользните за край, чтобы зарядить круговой удар.",
         "upgrade_ice_trail_name": "Ледяной след",
@@ -47,7 +53,7 @@ TRANSLATIONS = {
 
         # Hero Selection
         "HERO_SELECT_TITLE": "ВЫБОР ПЕРСОНАЖА",
-        "HERO_SELECT_HINT": "← → / A D для выбора, Enter для выбора героя и старта",
+        "HERO_SELECT_HINT": "← → / A D для выбора, Enter — выбрать и вернуться в меню",
         "hero_slider_name": "Слайдер",
         "hero_slider_sub": "Скоростной трюкач",
         "hero_slider_desc": "Заряды скольжения: 3 | Исходная скорость: +20% | КД скольжения: -15%",
@@ -129,6 +135,7 @@ TRANSLATIONS = {
         "UPGRADE_TITLE": "УРОВЕНЬ {}! Выберите улучшение:",
         "UPGRADE_HINT": "← → для выбора, Enter/1-3 для подтверждения",
         "UPGRADE_LVL": "Ур. {}",
+        "UPGRADE_REMAINING": "Осталось выборов: {}",
         "CAT_SLIDE": "⚡ Скольжение",
         "CAT_COMBAT": "⚔ Боевое",
         "CAT_SPECIAL": "✦ Особое",
@@ -333,6 +340,12 @@ TRANSLATIONS = {
         "MSG_BOSS_SPAWNED": "⚠ БОСС ПОЯВИЛСЯ! ⚠",
     },
     "en": {
+        "ACTIVE_FIGHTER": "ACTIVE FIGHTER",
+        "PAUSE_SURRENDER": "Surrender · save score",
+        "RUN_COMPLETE": "RUN COMPLETE",
+        "LOBBY": "ARENA LOBBY",
+        "ULT_LABEL": "ULTIMATE",
+
         "MSG_PERFECT_DODGE": "Perfect dodge! Cleave ready",
         "CTRL_PERFECT_DODGE": "White ring: slide clear of its edge to charge a sweeping punch.",
         "upgrade_ice_trail_name": "Ice Trail",
@@ -378,7 +391,7 @@ TRANSLATIONS = {
 
         # Hero Selection
         "HERO_SELECT_TITLE": "SELECT HERO",
-        "HERO_SELECT_HINT": "← → / A D to choose, Enter to select & start",
+        "HERO_SELECT_HINT": "← → / A D to choose, Enter to equip and return to menu",
         "hero_slider_name": "Slider",
         "hero_slider_sub": "Speed Stuntman",
         "hero_slider_desc": "Slide Charges: 3 | Initial Speed: +20% | Slide Cooldown: -15%",
@@ -460,6 +473,7 @@ TRANSLATIONS = {
         "UPGRADE_TITLE": "LEVEL {}! Choose upgrade:",
         "UPGRADE_HINT": "← → to choose, Enter/1-3 to confirm",
         "UPGRADE_LVL": "Lvl {}",
+        "UPGRADE_REMAINING": "Picks remaining: {}",
         "CAT_SLIDE": "⚡ Slide",
         "CAT_COMBAT": "⚔ Combat",
         "CAT_SPECIAL": "✦ Special",

@@ -7,17 +7,95 @@ from highscores import load_highscores, format_time, calculate_score
 from translations import t
 from heroes import HEROES, HERO_KEYS
 from achievements import ACHIEVEMENTS_LIST
+from typography import TextFont
+
+INK = (12, 18, 29)
+PANEL = (23, 34, 50)
+EDGE = (54, 73, 91)
+MUTED = (159, 180, 194)
+MINT = (109, 249, 197)
+PAPER = (233, 242, 246)
+
+
+def menu_rect(i):
+    return pygame.Rect(70, 222 + i * 56, 540, 48)
+
+
+def pause_rect(i):
+    return pygame.Rect(SCREEN_WIDTH // 2 - 250, 273 + i * 64, 500, 54)
+
+
+def hero_rect(i):
+    return pygame.Rect((SCREEN_WIDTH - (len(HERO_KEYS)*285 - 25))//2 + i*285, 190, 260, 360)
+
+
+def upgrade_rect(i, count):
+    width = min(UI_UPGRADE_BOX_WIDTH, (SCREEN_WIDTH - 80 - (count-1)*20)//count)
+    x = (SCREEN_WIDTH - count*width - (count-1)*20)//2
+    return pygame.Rect(x + i*(width+20), 192, width, UI_UPGRADE_BOX_HEIGHT)
+
+
+def language_rect(i):
+    return pygame.Rect(420, 290 + 74*i, 440, 60)
+
+
+def settings_rect(i):
+    return pygame.Rect(320, 185 + 65*i, 640, 54)
+
+
+def result_rect(i):
+    return pygame.Rect(410, 440 + i*65, 460, 54)
+
+
+def menu_inputs(events, rects):
+    """Yield (focused index, key); a left click activates just like Enter."""
+    for event in events:
+        if event.type == pygame.KEYDOWN:
+            yield None, event.key
+        elif event.type == pygame.MOUSEMOTION or (event.type == pygame.MOUSEBUTTONDOWN and event.button == 1):
+            for i, rect in enumerate(rects):
+                if rect.collidepoint(event.pos):
+                    yield i, pygame.K_RETURN if event.type == pygame.MOUSEBUTTONDOWN else None
+                    break
+
+
+def word_lines(font, text, width):
+    line = ''
+    for word in text.split():
+        joined = f'{line} {word}' if line else word
+        if line and font.size(joined)[0] > width:
+            yield line
+            line = word
+        else:
+            line = joined
+    if line:
+        yield line
 
 
 class UI:
     def __init__(self):
         pygame.font.init()
-        self.font = pygame.font.SysFont("Arial", UI_FONT_SIZE)
-        self.font_large = pygame.font.SysFont("Arial", UI_FONT_SIZE_LARGE, bold=True)
-        self.font_small = pygame.font.SysFont("Arial", UI_FONT_SIZE_SMALL)
-        self.font_title = pygame.font.SysFont("Arial", 72, bold=True)
-        self.font_medium = pygame.font.SysFont("Arial", 32)
-        self.font_combo = pygame.font.SysFont("Arial", 36, bold=True)
+        self.font = TextFont('body', UI_FONT_SIZE)
+        self.font_large = TextFont('display', 42)
+        self.font_small = TextFont('label', UI_FONT_SIZE_SMALL)
+        self.font_title = TextFont('poster', 54)
+        self.font_medium = TextFont('display', 29)
+        self.font_combo = TextFont('display', 36)
+        self.mono = TextFont('mono', 16)
+        self.body = TextFont('body', 19)
+
+    def button(self, screen, rect, label, index, selected):
+        fg = INK if selected else PAPER
+        pygame.draw.rect(screen, MINT if selected else PANEL, rect, border_radius=6)
+        if not selected:
+            pygame.draw.rect(screen, EDGE, rect, 1, border_radius=6)
+        number = self.mono.render(f'{index+1:02}', True, fg if selected else MUTED)
+        screen.blit(number, number.get_rect(midleft=(rect.left+18, rect.centery)))
+        text = self.font.render(label, True, fg)
+        screen.blit(text, text.get_rect(midleft=(rect.left+62, rect.centery)))
+        if selected:
+            x, y = rect.right-25, rect.centery
+            pygame.draw.lines(screen, INK, False, [(x-5,y-6),(x+1,y),(x-5,y+6)], 3)
 
     # ================================================================
     # HUD
@@ -357,100 +435,40 @@ class UI:
         title_rect = title_surface.get_rect(center=(SCREEN_WIDTH // 2, 100))
         screen.blit(title_surface, title_rect)
 
-        num_choices = len(choices)
-        total_width = num_choices * UI_UPGRADE_BOX_WIDTH + (num_choices - 1) * 20
-        start_x = (SCREEN_WIDTH - total_width) // 2
+        remaining = self.mono.render(t('UPGRADE_REMAINING', player.pending_levels + 1), True, PAPER)
+        screen.blit(remaining, remaining.get_rect(center=(SCREEN_WIDTH // 2, 149)))
 
         for i, upgrade in enumerate(choices):
-            box_x = start_x + i * (UI_UPGRADE_BOX_WIDTH + 20)
-            box_y = 200
-            rect = pygame.Rect(box_x, box_y, UI_UPGRADE_BOX_WIDTH, UI_UPGRADE_BOX_HEIGHT)
+            r = upgrade_rect(i, len(choices))
+            active = i == selected_index
+            pygame.draw.rect(screen, PANEL, r, border_radius=10)
+            pygame.draw.rect(screen, MINT if active else EDGE, r, 3 if active else 1, border_radius=10)
+            x, y = r.x + 24, r.y + 22
+            category = {'fist': 'CAT_COMBAT', 'hero': 'CAT_HERO', 'slide': 'CAT_SLIDE',
+                        'utility': 'CAT_SPECIAL', 'basic': 'CAT_BASIC'}[upgrade.category]
+            pygame.draw.circle(screen, upgrade.icon_color, (x+7, y+13), 7)
+            screen.blit(self.body.render(t(category), True, PAPER), (x+23, y))
+            badge = self.mono.render(f'0{i+1}', True, MUTED)
+            screen.blit(badge, badge.get_rect(topright=(r.right-24, y)))
+            y += 52
+            for line in word_lines(self.font_medium, upgrade.name, r.w-48):
+                screen.blit(self.font_medium.render(line, True, PAPER), (x, y))
+                y += 36
+            y += 14
+            for line in word_lines(self.body, upgrade.description, r.w-48):
+                screen.blit(self.body.render(line, True, MUTED), (x, y))
+                y += 25
+            pygame.draw.line(screen, EDGE, (x, r.bottom-75), (r.right-24, r.bottom-75))
+            current, cap = upgrade.current_level, upgrade.max_level
+            progress = f'{current} → {current + 1}' + (f' / {cap}' if cap else '')
+            level = self.body.render(t('UPGRADE_LVL', progress), True, MINT if active else PAPER)
+            screen.blit(level, (x, r.bottom-60))
+            if cap:
+                pygame.draw.rect(screen, EDGE, (x, r.bottom-24, r.w-48, 4))
+                pygame.draw.rect(screen, upgrade.icon_color, (x, r.bottom-24, int((r.w-48)*(current+1)/cap), 4))
 
-            is_selected = (i == selected_index)
-
-            bg_color = (40, 40, 60) if is_selected else (25, 25, 40)
-            pygame.draw.rect(screen, bg_color, rect)
-
-            border_color = YELLOW if is_selected else GRAY
-            border_w = 4 if is_selected else 2
-            pygame.draw.rect(screen, border_color, rect, border_w)
-
-            # Категория / Значок
-            icon_box = pygame.Rect(box_x + 15, box_y + 15, 40, 40)
-            pygame.draw.rect(screen, upgrade.icon_color, icon_box)
-            pygame.draw.rect(screen, WHITE, icon_box, 2)
-
-            cat_str = f"[{upgrade.category.upper()}]"
-            cat_s = self.font_small.render(cat_str, True, GOLD if upgrade.category == "hero" else LIGHT_GRAY)
-            screen.blit(cat_s, (box_x + 65, box_y + 18))
-
-            name_surface = self.font.render(upgrade.name, True, WHITE)
-            screen.blit(name_surface, (box_x + 65, box_y + 35))
-
-            desc_surface = self.font_small.render(upgrade.description, True, LIGHT_GRAY)
-            screen.blit(desc_surface, (box_x + 15, box_y + 70))
-
-            level_str = t("UPGRADE_MAX") if upgrade.max_level and upgrade.current_level >= upgrade.max_level else t("UPGRADE_LEVEL", upgrade.current_level + 1)
-            level_surface = self.font_small.render(level_str, True, GOLD if is_selected else GRAY)
-            screen.blit(level_surface, (box_x + 15, box_y + 110))
-
-        hint_text = t("UPGRADE_HINT")
-        hint_surface = self.font_small.render(hint_text, True, GRAY)
-        hint_rect = hint_surface.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 100))
-        screen.blit(hint_surface, hint_rect)
-
-    def _draw_upgrade_box(self, screen, upgrade, x, y, selected, number):
-        rect = pygame.Rect(x, y, UI_UPGRADE_BOX_WIDTH, UI_UPGRADE_BOX_HEIGHT)
-
-        bg_color = (40, 40, 60) if not selected else (60, 60, 90)
-        pygame.draw.rect(screen, bg_color, rect)
-
-        if selected:
-            glow_rect = rect.inflate(6, 6)
-            pygame.draw.rect(screen, YELLOW, glow_rect, 2)
-
-        border_color = YELLOW if selected else GRAY
-        border_width = 3 if selected else 1
-        pygame.draw.rect(screen, border_color, rect, border_width)
-
-        num_text = self.font_small.render(f"[{number}]", True, LIGHT_GRAY)
-        screen.blit(num_text, (x + 5, y + 5))
-
-        icon_rect = pygame.Rect(x + 15, y + 25, 30, 30)
-        pygame.draw.rect(screen, upgrade.icon_color, icon_rect)
-        pygame.draw.rect(screen, WHITE, icon_rect, 1)
-
-        name_surface = self.font.render(upgrade.name, True, WHITE)
-        screen.blit(name_surface, (x + 55, y + 20))
-
-        if upgrade.current_level > 0:
-            level_str = t("UPGRADE_LVL", upgrade.current_level)
-            if upgrade.max_level:
-                level_str += f"/{upgrade.max_level}"
-            level_surface = self.font_small.render(level_str, True, YELLOW)
-            screen.blit(level_surface, (x + 55, y + 45))
-
-        desc_surface = self.font_small.render(upgrade.description, True, LIGHT_GRAY)
-        screen.blit(desc_surface, (x + 15, y + 75))
-
-        if upgrade.category == "hero":
-            cat_text = t("CAT_HERO")
-            cat_color = GOLD
-        elif "slide" in upgrade.upgrade_id:
-            cat_text = t("CAT_SLIDE")
-            cat_color = CYAN
-        elif upgrade.category == "fist" or upgrade.upgrade_id in ["damage", "attack_speed", "attack_range", "crit_chance", "crit_multiplier", "target_count"]:
-            cat_text = t("CAT_COMBAT")
-            cat_color = RED
-        elif upgrade.upgrade_id in ["aura_damage", "aura_slow", "thorns", "block_chance", "shield_wall", "orbital_blade"]:
-            cat_text = t("CAT_SPECIAL")
-            cat_color = PURPLE
-        else:
-            cat_text = t("CAT_BASIC")
-            cat_color = GREEN
-
-        cat_surface = self.font_small.render(cat_text, True, cat_color)
-        screen.blit(cat_surface, (x + 15, y + 95))
+        hint = self.body.render(t('UPGRADE_HINT'), True, PAPER)
+        screen.blit(hint, hint.get_rect(center=(SCREEN_WIDTH//2, SCREEN_HEIGHT-90)))
 
     # ================================================================
     # ВЫБОР ПЕРСОНАЖА
@@ -462,28 +480,13 @@ class UI:
         title_rect = title.get_rect(center=(SCREEN_WIDTH // 2, 50))
         screen.blit(title, title_rect)
 
-        box_w = 260
-        box_h = 360
-        total_w = len(HERO_KEYS) * box_w + (len(HERO_KEYS) - 1) * 25
-        start_x = (SCREEN_WIDTH - total_w) // 2
-
         for i, key in enumerate(HERO_KEYS):
             h_data = HEROES[key]
-            is_selected = (i == selected_index)
-
-            bx = start_x + i * (box_w + 25)
-            by = SCREEN_HEIGHT // 2 - box_h // 2 + 10
-            rect = pygame.Rect(bx, by, box_w, box_h)
-
-            bg_c = (50, 50, 80) if is_selected else (30, 30, 50)
-            pygame.draw.rect(screen, bg_c, rect)
-
-            if is_selected:
-                glow = rect.inflate(8, 8)
-                pygame.draw.rect(screen, YELLOW, glow, 3)
-
-            border_c = YELLOW if is_selected else GRAY
-            pygame.draw.rect(screen, border_c, rect, 2)
+            rect = hero_rect(i)
+            bx, by, box_w = rect.x, rect.y, rect.w
+            pygame.draw.rect(screen, PANEL, rect, border_radius=10)
+            pygame.draw.rect(screen, MINT if i == selected_index else EDGE, rect,
+                             3 if i == selected_index else 1, border_radius=10)
 
             # Круг персонажа
             cx = bx + box_w // 2
@@ -505,10 +508,10 @@ class UI:
             parts = desc_text.split(" | ")
             y_offset = by + 180
             for part in parts:
-                p_s = self.font_small.render(part, True, LIGHT_GRAY)
-                p_r = p_s.get_rect(center=(cx, y_offset))
-                screen.blit(p_s, p_r)
-                y_offset += 25
+                for line in word_lines(self.font_small, part, box_w - 28):
+                    p_s = self.font_small.render(line, True, LIGHT_GRAY)
+                    screen.blit(p_s, p_s.get_rect(center=(cx, y_offset)))
+                    y_offset += 23
 
         hint = self.font_small.render(t("HERO_SELECT_HINT"), True, GRAY)
         hint_rect = hint.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 40))
@@ -527,24 +530,7 @@ class UI:
         options = [t("LANG_RU"), t("LANG_EN")]
 
         for i, opt in enumerate(options):
-            y = 320 + i * 80
-            is_selected = (i == selected_option)
-            color = YELLOW if is_selected else WHITE
-            font = self.font_large if is_selected else self.font_medium
-
-            text = font.render(opt, True, color)
-            text_rect = text.get_rect(center=(SCREEN_WIDTH // 2, y))
-
-            if is_selected:
-                highlight = pygame.Rect(text_rect.x - 30, text_rect.y - 8,
-                                       text_rect.width + 60, text_rect.height + 16)
-                pygame.draw.rect(screen, (30, 30, 60), highlight)
-                pygame.draw.rect(screen, YELLOW, highlight, 2)
-
-                arrow = self.font_large.render("►", True, YELLOW)
-                screen.blit(arrow, (highlight.x - 35, text_rect.y))
-
-            screen.blit(text, text_rect)
+            self.button(screen, language_rect(i), opt, i, i == selected_option)
 
         hint = self.font_small.render(t("SELECT_LANG_HINT"), True, GRAY)
         hint_rect = hint.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 60))
@@ -574,21 +560,7 @@ class UI:
         ]
 
         for i, opt in enumerate(options):
-            y = 200 + i * 65
-            is_selected = (i == selected_option)
-            color = YELLOW if is_selected else WHITE
-            font = self.font_large if is_selected else self.font_medium
-
-            text = font.render(opt, True, color)
-            text_rect = text.get_rect(center=(SCREEN_WIDTH // 2, y))
-
-            if is_selected:
-                highlight = pygame.Rect(text_rect.x - 20, text_rect.y - 5,
-                                       text_rect.width + 40, text_rect.height + 10)
-                pygame.draw.rect(screen, (30, 30, 50), highlight)
-                pygame.draw.rect(screen, YELLOW, highlight, 2)
-
-            screen.blit(text, text_rect)
+            self.button(screen, settings_rect(i), opt, i, i == selected_option)
 
         hint = self.font_small.render(t("SETTINGS_HINT"), True, GRAY)
         hint_rect = hint.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 50))
@@ -634,105 +606,51 @@ class UI:
     # ГЛАВНОЕ МЕНЮ
     # ================================================================
     def draw_main_menu(self, screen, selected_option, selected_hero_index=0):
-        screen.fill((12, 14, 28))
+        screen.fill(INK)
+        key = HERO_KEYS[selected_hero_index]
+        hero = HEROES[key]
+        accent = hero['color']
+        # Track markings behind the two panels.
+        for x in range(-300, SCREEN_WIDTH, 68):
+            pygame.draw.line(screen, (19, 29, 43), (x, SCREEN_HEIGHT), (x+350, 0), 1)
+        screen.blit(self.mono.render('SS  /  ' + t('LOBBY'), True, MINT), (70, 40))
+        pygame.draw.line(screen, EDGE, (70, 76), (1210, 76))
+        screen.blit(self.font_title.render(t('TITLE'), True, PAPER), (66, 85))
+        screen.blit(self.body.render(t('SUBTITLE'), True, MUTED), (72, 163))
+        keys = ('MENU_PLAY', 'MENU_HEROES', 'MENU_ACHIEVEMENTS', 'MENU_SETTINGS',
+                'MENU_CONTROLS', 'MENU_HIGHSCORES', 'MENU_EXIT')
+        for i, label in enumerate(keys):
+            self.button(screen, menu_rect(i), t(label), i, i == selected_option)
 
-        t_time = pygame.time.get_ticks() / 1000.0
-
-        # Анимированный динамический фон (дрейфующие неоновые частицы)
-        for i in range(35):
-            px = int((math.sin(t_time * 0.4 + i * 0.7) * 0.5 + 0.5) * SCREEN_WIDTH)
-            py = int((math.cos(t_time * 0.25 + i * 1.1) * 0.5 + 0.5) * SCREEN_HEIGHT)
-            alpha = int(abs(math.sin(t_time * 1.5 + i)) * 110)
-            size = 3 if i % 2 == 0 else 5
-            s = pygame.Surface((size, size), pygame.SRCALPHA)
-            color = (0, 220, 255, alpha) if i % 3 == 0 else (255, 200, 50, alpha)
-            s.fill(color)
-            screen.blit(s, (px, py))
-
-        # Заголовок игры с неоновой тенью
-        title = self.font_title.render(t("TITLE"), True, CYAN)
-        title_rect = title.get_rect(center=(SCREEN_WIDTH // 2 - 120, 100))
-
-        shadow = self.font_title.render(t("TITLE"), True, DARK_BLUE)
-        screen.blit(shadow, (title_rect.x + 4, title_rect.y + 4))
-        screen.blit(title, title_rect)
-
-        subtitle = self.font.render(t("SUBTITLE"), True, GOLD)
-        sub_rect = subtitle.get_rect(center=(SCREEN_WIDTH // 2 - 120, 160))
-        screen.blit(subtitle, sub_rect)
-
-        # Меню слева
-        menu_items = [
-            t("MENU_PLAY"),
-            t("MENU_HEROES"),
-            t("MENU_ACHIEVEMENTS"),
-            t("MENU_SETTINGS"),
-            t("MENU_CONTROLS"),
-            t("MENU_HIGHSCORES"),
-            t("MENU_EXIT"),
-        ]
-
-        menu_x = SCREEN_WIDTH // 2 - 120
-
-        for i, item in enumerate(menu_items):
-            y = 230 + i * 48
-            is_selected = (i == selected_option)
-
-            color = YELLOW if is_selected else WHITE
-            font = self.font_large if is_selected else self.font_medium
-
-            text = font.render(item, True, color)
-            text_rect = text.get_rect(center=(menu_x, y))
-
-            if is_selected:
-                highlight = pygame.Rect(
-                    text_rect.x - 25, text_rect.y - 6,
-                    text_rect.width + 50, text_rect.height + 12
-                )
-                pygame.draw.rect(screen, (35, 45, 75), highlight, border_radius=6)
-                pygame.draw.rect(screen, YELLOW, highlight, 2, border_radius=6)
-
-                arrow_l = self.font_large.render("►", True, YELLOW)
-                screen.blit(arrow_l, (highlight.x - 32, text_rect.y))
-
-            screen.blit(text, text_rect)
-
-        # Карточка выбранного героя (справа от меню)
-        hero_key = HERO_KEYS[selected_hero_index] if 0 <= selected_hero_index < len(HERO_KEYS) else HERO_KEYS[0]
-        h_data = HEROES.get(hero_key, HEROES["slider"])
-
-        card_w, card_h = 240, 310
-        card_x = SCREEN_WIDTH - card_w - 60
-        card_y = 180
-        card_rect = pygame.Rect(card_x, card_y, card_w, card_h)
-
-        pygame.draw.rect(screen, (22, 28, 48), card_rect, border_radius=12)
-        pygame.draw.rect(screen, CYAN, card_rect, 2, border_radius=12)
-
-        # Аватар героя
-        cx = card_x + card_w // 2
-        cy = card_y + 55
-        pygame.draw.circle(screen, h_data["color"], (cx, cy), 35)
-        pygame.draw.circle(screen, h_data["outline_color"], (cx, cy), 35, 3)
-
-        # Данные героя
-        h_name = self.font.render(t(f"hero_{hero_key}_name"), True, WHITE)
-        screen.blit(h_name, h_name.get_rect(center=(cx, card_y + 110)))
-
-        h_sub = self.font_small.render(t(f"hero_{hero_key}_sub"), True, GOLD)
-        screen.blit(h_sub, h_sub.get_rect(center=(cx, card_y + 135)))
-
-        ult_name = t(f"{h_data['ult_id']}_name")
-        ult_lbl = self.font_small.render(f"⚡ {ult_name}", True, CYAN)
-        screen.blit(ult_lbl, ult_lbl.get_rect(center=(cx, card_y + 175)))
-
-        change_hint = self.font_small.render(t("MENU_HEROES"), True, GRAY)
-        screen.blit(change_hint, change_hint.get_rect(center=(cx, card_y + 270)))
-
-        # Подсказка снизу
-        hint = self.font_small.render(f"{t('MENU_HINT')}  |  [F1] Trainer", True, GRAY)
-        hint_rect = hint.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 25))
-        screen.blit(hint, hint_rect)
+        card = pygame.Rect(661, 202, 549, 405)
+        pygame.draw.rect(screen, PANEL, card, border_radius=12)
+        pygame.draw.rect(screen, EDGE, card, 1, border_radius=12)
+        x = card.x + 28
+        screen.blit(self.mono.render(t('ACTIVE_FIGHTER'), True, MUTED), (x, 225))
+        serial = self.mono.render(f'{selected_hero_index+1:02} / {len(HERO_KEYS):02}', True, accent)
+        screen.blit(serial, serial.get_rect(topright=(card.right-28, 225)))
+        # Hero emblem with a contrail, orbit ticks and the fighter's own colours.
+        cx, cy = card.centerx, 329
+        for j in range(3):
+            pygame.draw.line(screen, EDGE, (cx-115+j*12, cy+29-j*14), (cx-18, cy+10-j*14), 3)
+        pygame.draw.circle(screen, EDGE, (cx,cy), 60, 1)
+        for j in range(4):
+            ang = pygame.time.get_ticks()*0.0006 + j*math.pi/2
+            pygame.draw.arc(screen, accent, (cx-61,cy-61,122,122), ang, ang+0.38, 3)
+        pygame.draw.circle(screen, hero['outline_color'], (cx,cy), 36)
+        pygame.draw.circle(screen, accent, (cx,cy), 32)
+        pygame.draw.line(screen, INK, (cx+3,cy-9), (cx+24,cy-12), 5)
+        pygame.draw.circle(screen, accent, (cx+29,cy+22), 10)
+        pygame.draw.circle(screen, INK, (cx+29,cy+22), 10, 2)
+        for font, field, y, color in [(self.font_medium, 'name', 417, PAPER),
+                                      (self.body, 'sub', 450, MUTED)]:
+            label = font.render(t(f'hero_{key}_{field}'), True, color)
+            screen.blit(label, label.get_rect(center=(cx, y)))
+        pygame.draw.line(screen, EDGE, (x, 484), (card.right-28, 484))
+        screen.blit(self.mono.render(t('ULT_LABEL'), True, MUTED), (x, 509))
+        screen.blit(self.font.render('⚡ ' + t(hero['ult_id']+'_name'), True, accent), (x, 538))
+        pygame.draw.line(screen, EDGE, (70, 646), (1210, 646))
+        screen.blit(self.body.render(t('MENU_HINT'), True, MUTED), (70, 661))
 
     # ================================================================
     # РЕКОРДЫ
@@ -852,35 +770,20 @@ class UI:
         title_rect = title.get_rect(center=(SCREEN_WIDTH // 2, 200))
         screen.blit(title, title_rect)
 
-        pause_items = [t("PAUSE_RESUME"), t("PAUSE_SETTINGS"), t("PAUSE_MAIN_MENU")]
-
-        for i, item in enumerate(pause_items):
-            y = 330 + i * 65
-            is_selected = (i == selected_option)
-            color = YELLOW if is_selected else WHITE
-            font = self.font_large if is_selected else self.font_medium
-
-            text = font.render(item, True, color)
-            text_rect = text.get_rect(center=(SCREEN_WIDTH // 2, y))
-
-            if is_selected:
-                highlight = pygame.Rect(text_rect.x - 20, text_rect.y - 5,
-                                       text_rect.width + 40, text_rect.height + 10)
-                pygame.draw.rect(screen, (40, 40, 60), highlight)
-                pygame.draw.rect(screen, YELLOW, highlight, 2)
-
-            screen.blit(text, text_rect)
+        pause_items = ('PAUSE_RESUME', 'PAUSE_SETTINGS', 'PAUSE_SURRENDER', 'PAUSE_MAIN_MENU')
+        for i, label in enumerate(pause_items):
+            self.button(screen, pause_rect(i), t(label), i, i == selected_option)
 
     # ================================================================
     # GAME OVER
     # ================================================================
-    def draw_game_over(self, screen, player, game_time, selected_option, new_record_pos=-1):
+    def draw_game_over(self, screen, player, game_time, selected_option, new_record_pos=-1, surrendered=False):
         overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
         overlay.fill(BLACK)
         overlay.set_alpha(180)
         screen.blit(overlay, (0, 0))
 
-        title = self.font_title.render(t("GAME_OVER_TITLE"), True, RED)
+        title = self.font_title.render(t("RUN_COMPLETE" if surrendered else "GAME_OVER_TITLE"), True, MINT if surrendered else RED)
         title_rect = title.get_rect(center=(SCREEN_WIDTH // 2, 120))
         screen.blit(title, title_rect)
 
@@ -912,18 +815,4 @@ class UI:
         options = [t("GO_RETRY"), t("GO_MENU")]
 
         for i, item in enumerate(options):
-            oy = 460 + i * 60
-            is_selected = (i == selected_option)
-            color = YELLOW if is_selected else WHITE
-            font = self.font_large if is_selected else self.font_medium
-
-            text = font.render(item, True, color)
-            text_rect = text.get_rect(center=(SCREEN_WIDTH // 2, oy))
-
-            if is_selected:
-                highlight = pygame.Rect(text_rect.x - 20, text_rect.y - 5,
-                                       text_rect.width + 40, text_rect.height + 10)
-                pygame.draw.rect(screen, (40, 40, 60), highlight)
-                pygame.draw.rect(screen, YELLOW, highlight, 2)
-
-            screen.blit(text, text_rect)
+            self.button(screen, result_rect(i), item, i, i == selected_option)

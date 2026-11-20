@@ -24,6 +24,10 @@ Survivors-style arena roguelike on Pygame. Pick a hero, survive the hordes, leve
 ## Run
 
 ```bash
-pip install pygame
+python -m pip install -r requirements.txt
 python main.py
 ```
+
+The [bundled fonts and their licenses](assets/fonts/README.md) ship with the game, including Cyrillic, symbols, and monochrome Noto Emoji. No font downloads or system font configuration are needed at runtime.
+
+Choose a fighter in **Heroes**, then start the run with **Play**. Use the arrow keys and Enter or click a menu button. **Pause → Surrender** finishes the run and submits its score to the same local leaderboard as a defeat.
