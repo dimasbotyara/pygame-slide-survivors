@@ -135,6 +135,12 @@ class UltimateTests(TestCase):
         self.assertEqual(len(g.rain_drops), 150)
         g._update_spark_storm(.5)
         self.assertLess(g.spark_storm_timer, 10.0)
+        g.rain_drops = [[100, 100, 500, 20]]
+        with patch('pygame.draw.line') as draw_rain:
+            g._draw_spark_storm_weather()
+        rain_start, rain_end = draw_rain.call_args.args[2:4]
+        self.assertGreater(rain_end[1]-rain_start[1],
+                           abs(rain_end[0]-rain_start[0]))
         lightning_target = Enemy(120, 0, 'ghoul')
         lightning_target.max_hp = lightning_target.hp = 5000
         g.enemies = [lightning_target]
@@ -145,7 +151,7 @@ class UltimateTests(TestCase):
         g.selected_hero_index = 3
         g.start_new_game()
         g.player.hp = 50
-        shadow_target = Enemy(93, 15, 'ghoul')
+        shadow_target = Enemy(130, 20, 'ghoul')
         shadow_target.max_hp = shadow_target.hp = 5000
         g.enemies = [shadow_target]
         hp_before_shadow = shadow_target.hp
