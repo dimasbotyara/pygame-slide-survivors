@@ -164,6 +164,8 @@ class Bestiary:
     def image(self, key, seconds=0, warning=False):
         e = self.enemy(key)
         e.anim_timer = seconds
+        if e.home_biome:
+            e.walk_frame = int(seconds * 8) % 4
         e.windup_left = e.windup_duration * (1 - (seconds * .7) % 1) if warning else 0
         image = pygame.Surface((192, 192), pygame.SRCALPHA)
         e.draw_windup(image, self.camera)

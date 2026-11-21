@@ -39,15 +39,70 @@ RESIDENTS = {
 RESIDENT_BY_BIOME = {spec.biome: kind for kind, spec in RESIDENTS.items()}
 
 
-@lru_cache(maxsize=32)
-def resident_sprite(kind, size, flashing):
+@lru_cache(maxsize=256)
+def resident_sprite(kind, size, flashing, frame=0):
+    """Four pixel-art gait frames, cached and shared by residents of a type.
+
+    Flying creatures flap their outer wings; grounded creatures alternate their
+    outer feet. The central face/body stays intact and easy to recognise.
+    Frame zero is the resting pose and the default for existing callers.
+    """
     spec = RESIDENTS[kind]
     rows = spec.pixels
     palette = ((255, 255, 255) if flashing else spec.color,
                tuple(min(255, c + 40) for c in spec.color), (255, 237, 121), (44, 35, 55))
-    image = pygame.Surface((max(map(len, rows)), len(rows)), pygame.SRCALPHA)
+    width, height = max(map(len, rows)), len(rows)
+    # Extra transparent pixels give limbs room to move without clipping.
+    image = pygame.Surface((width + 2, height + 2), pygame.SRCALPHA)
+    flyers = ('clover_moth', 'echo_bat', 'rune_wisp')
+    phase = (0, 1, 0, -1)[frame % 4]
     for y, row in enumerate(rows):
         for x, cell in enumerate(row):
-            if cell != '.':
-                image.set_at((x, y), palette[int(cell)-1])
+            if cell == '.':
+                continue
+            dx = dy = 0
+            if kind in flyers:
+                if x < 3 or x >= width - 3:
+                    dy = phase
+            elif y >= height - 2 and (x < 3 or x >= width - 3):
+                dy = phase if x < width // 2 else -phase
+            image.set_at((x + 1 + dx, y + 1 + dy), palette[int(cell)-1])
     return pygame.transform.scale(image, (2*size+4, 2*size+2))
+
+
+class HabitatFade:
+    """Render-only dissolution after a resident leaves its home biome."""
+    duration = 0.75
+
+    def __init__(self, enemy):
+        self.x, self.y, self.size = enemy.x, enemy.y, enemy.size
+        self.elapsed = 0.0
+        self.sprite = resident_sprite(enemy.enemy_type, enemy.size, False, enemy.walk_frame)
+        # Sample a small pixel grid once; no gameplay RNG or per-frame allocations.
+        grid = pygame.transform.scale(self.sprite, (11, 11))
+        self.pixels = [(x, y, grid.get_at((x, y))) for y in range(11) for x in range(11)
+                       if grid.get_at((x, y)).a]
+        self.canvas = pygame.Surface((self.size * 8 + 60, self.size * 8 + 60), pygame.SRCALPHA)
+
+    def update(self, dt):
+        self.elapsed += dt
+        return self.elapsed < self.duration
+
+    def draw(self, screen, camera):
+        progress = min(1.0, self.elapsed / self.duration)
+        sx, sy = camera.apply(self.x, self.y)
+        # The sprite contracts as coloured pixels drift away, then vanishes.
+        width = max(1, round(self.sprite.get_width() * (1 - .8 * progress)))
+        height = max(1, round(self.sprite.get_height() * (1 - .8 * progress)))
+        image = pygame.transform.scale(self.sprite, (width, height))
+        self.canvas.fill((0, 0, 0, 0))
+        cx, cy = self.canvas.get_rect().center
+        self.canvas.blit(image, image.get_rect(center=(cx, int(cy - progress * 8))))
+        cell = max(1, round(self.size / 6 * (1 - progress * .6)))
+        for x, y, color in self.pixels:
+            # Coordinate-derived drift avoids consuming the game's random stream.
+            dx = (x - 5) * (self.size / 6 + progress * 3)
+            dy = (y - 5) * (self.size / 6 + progress * 2) - progress * (10 + (x * 7 + y * 3) % 12)
+            pygame.draw.rect(self.canvas, color, (int(cx + dx), int(cy + dy), cell, cell))
+        self.canvas.set_alpha(round(255 * (1 - progress)))
+        screen.blit(self.canvas, self.canvas.get_rect(center=(int(sx), int(sy))))

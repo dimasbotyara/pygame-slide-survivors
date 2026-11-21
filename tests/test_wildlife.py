@@ -1,5 +1,8 @@
 import os
 import unittest
+import random
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 os.environ.setdefault('SDL_VIDEODRIVER', 'dummy')
@@ -12,11 +15,17 @@ from items import DroppedItem, roll_drop
 from main import Game
 from translations import TRANSLATIONS
 from world import World
-from wildlife import RESIDENTS, RESIDENT_BY_BIOME
+from wildlife import RESIDENTS, RESIDENT_BY_BIOME, resident_sprite, HabitatFade
+import pygame
 
 
 class WildlifeTests(unittest.TestCase):
     def setUp(self):
+        folder = TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        patcher = patch('settings_manager.SETTINGS_FILE', Path(folder.name) / 'settings.json')
+        patcher.start()
+        self.addCleanup(patcher.stop)
         self.g = Game()
         self.g.start_new_game()
         self.g.world = World(3)
@@ -66,6 +75,65 @@ class WildlifeTests(unittest.TestCase):
             g.deal_damage_to_enemy(local, 10000)
         self.assertEqual((len(g.xp_orbs), g.player.enemies_killed), (1, 1))
         self.assertEqual([d.item_type for d in g.dropped_items], ['iron_acorn'])
+
+    def test_all_residents_have_distinct_cached_gait_frames(self):
+        for kind in RESIDENTS:
+            with self.subTest(kind=kind):
+                frames = [resident_sprite(kind, 15, False, frame) for frame in range(4)]
+                self.assertNotEqual(pygame.image.tobytes(frames[1], 'RGBA'),
+                                    pygame.image.tobytes(frames[3], 'RGBA'))
+                self.assertIs(frames[1], resident_sprite(kind, 15, False, 1))
+                resident = Enemy(0, 0, kind)
+                resident.update(.2, 500, 0, [resident])
+                self.assertNotEqual(resident.walk_frame, 0)
+                # Attack wind-up stops gait without disabling the existing bob.
+                resident.windup_left = .1
+                resident.update(.1, 500, 0, [resident])
+                self.assertEqual(resident.walk_frame, 0)
+
+    def test_environment_fade_is_visual_only_and_expires(self):
+        g = self.g
+        home = g.world.biome_at(0, 0).key
+        x = next(x for x in range(100, 20000, 100) if g.world.biome_at(x, 0).key != home)
+        resident = Enemy(x, 0, RESIDENT_BY_BIOME[home])
+        g.enemies = [resident]
+        state = random.getstate()
+        with patch.object(g.particle_manager, 'spawn_death_particles') as particles, patch('main.roll_drop') as drop:
+            g.update_enemies(.01)
+            particles.assert_not_called()
+            drop.assert_not_called()
+        self.assertEqual(random.getstate(), state)
+        self.assertEqual(g.enemies, [])
+        self.assertEqual(len(g.habitat_fades), 1)
+        self.assertFalse(resident.alive)
+        self.assertFalse(g.xp_orbs or g.dropped_items or g.corpse_positions or g.pending_explosions)
+        self.assertEqual((g.player.enemies_killed, g.player.combo_count, g.player.ult_charge), (0, 0, 0))
+        effect = g.habitat_fades[0]
+        # Drawing and pausing do not advance the effect.
+        effect.draw(g.screen, g.camera)
+        g.state = 'paused'
+        g.draw_paused()
+        self.assertEqual(effect.elapsed, 0)
+        g.update_enemies(HabitatFade.duration / 2)
+        self.assertEqual(len(g.habitat_fades), 1)
+        effect.draw(g.screen, g.camera)
+        g.update_enemies(HabitatFade.duration / 2)
+        self.assertFalse(g.habitat_fades)
+        g.start_new_game()
+        self.assertFalse(g.habitat_fades)
+
+    def test_combat_death_keeps_existing_particles_without_habitat_fade(self):
+        g = self.g
+        kind = RESIDENT_BY_BIOME[g.world.biome_at(0, 0).key]
+        resident = Enemy(0, 0, kind)
+        g.enemies = [resident]
+        with patch.object(g.particle_manager, 'spawn_death_particles') as particles:
+            g.deal_damage_to_enemy(resident, 10000)
+            particles.assert_called_once()
+        g.update_enemies(.01)
+        self.assertFalse(g.habitat_fades)
+        self.assertEqual(g.player.enemies_killed, 1)
+        self.assertEqual(len(g.xp_orbs), 1)
 
     def test_tonics_draw_collect_apply_and_expire(self):
         g, p = self.g, self.g.player

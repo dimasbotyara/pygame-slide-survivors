@@ -93,6 +93,8 @@ class Enemy:
 
         # Визуал
         self.anim_timer = random.random() * 10
+        self.walk_timer = 0.0
+        self.walk_frame = 0
 
         # Для некроманта — хранить позиции смертей рядом
         self.nearby_corpse_positions = []
@@ -188,6 +190,12 @@ class Enemy:
 
         self.x += self.velocity_x * dt
         self.y += self.velocity_y * dt
+        if self.home_biome:
+            if math.hypot(self.velocity_x, self.velocity_y) > 1:
+                self.walk_timer += dt * 8
+                self.walk_frame = int(self.walk_timer) % 4
+            else:
+                self.walk_frame = 0
 
         if not self.is_ghost:
             self.separate_from_others(enemies_list, dt)
@@ -331,7 +339,7 @@ class Enemy:
         # Рисуем по типу
         draw_method = getattr(self, f"_draw_{self.enemy_type}", None)
         if self.home_biome:
-            sprite = resident_sprite(self.enemy_type, self.size, self.flash_timer > 0)
+            sprite = resident_sprite(self.enemy_type, self.size, self.flash_timer > 0, self.walk_frame)
             bob = int(math.sin(self.anim_timer * 6) * 2)
             screen.blit(sprite, sprite.get_rect(center=(sx, sy + bob)))
         elif draw_method:
