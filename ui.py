@@ -190,6 +190,10 @@ class UI:
         if guide is not None:
             for name in ('INK', 'PANEL', 'EDGE', 'MUTED', 'MINT', 'PAPER'):
                 setattr(guide, name, globals()[name])
+        # Keep an instance copy as well as the module palette. Game-level
+        # overlays (e.g. the FPS badge) consume these values through UI.
+        self.INK, self.PANEL, self.EDGE = INK, PANEL, EDGE
+        self.MUTED, self.MINT, self.PAPER = MUTED, MINT, PAPER
         self.theme_accent = accent
         self.theme_palette = {'accent': MINT, 'panel': PANEL, 'edge': EDGE, 'text': PAPER}
         game = getattr(self, 'game', None)
