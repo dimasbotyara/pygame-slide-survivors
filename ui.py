@@ -77,6 +77,18 @@ def settings_value_right_rect(i):
     return pygame.Rect(row.right-54, row.y+6, 34, row.h-12)
 
 
+def reset_button_rect():
+    return pygame.Rect(70, 642, 650, 38)
+
+
+def reset_confirm_rect():
+    return pygame.Rect(390, 400, 235, 48)
+
+
+def reset_cancel_rect():
+    return pygame.Rect(655, 400, 235, 48)
+
+
 def settings_tab_rect(i):
     gap = 8
     width = (1140-gap*(len(TABS)-1))//len(TABS)
@@ -763,7 +775,13 @@ class UI:
             screen.blit(left_arrow, left_arrow.get_rect(center=settings_value_left_rect(i).center))
             screen.blit(right_arrow, right_arrow.get_rect(center=settings_value_right_rect(i).center))
         hint = self.body.render(t('SETTINGS_TABS_HINT'), True, MUTED)
-        screen.blit(hint, (70, 674))
+        screen.blit(hint, (70, 690))
+        rect = reset_button_rect()
+        pygame.draw.rect(screen, (112, 45, 48), rect, border_radius=6)
+        if selected_option == len(TABS[tab][1]):
+            pygame.draw.rect(screen, PAPER, rect, 2, border_radius=6)
+        label = self.fitted_text(t('RESET_BUTTON'), PAPER, rect.w-20, 27, 19)
+        screen.blit(label, label.get_rect(center=rect.center))
         note = self.font_small.render(t('SETTINGS_NOTE'), True, MUTED)
         screen.blit(note, (70, 620))
 
@@ -1033,7 +1051,6 @@ class UI:
         controls = [
             (t("CTRL_MOVE_KEY"), t("CTRL_MOVE_DESC")),
             (t("CTRL_SLIDE_KEY"), t("CTRL_SLIDE_DESC")),
-            (t("CTRL_DASH_KEY"), t("CTRL_DASH_DESC")),
             (t("CTRL_ULT_KEY"), t("CTRL_ULT_DESC")),
             (t("CTRL_LOOK_KEY"), t("CTRL_LOOK_DESC")),
             (t("CTRL_SELECT_KEY"), t("CTRL_SELECT_DESC")),
@@ -1045,10 +1062,6 @@ class UI:
             ("", t("CTRL_SLIDE_INFO_3")),
             ("", t("CTRL_SLIDE_INFO_4")),
             ("", t("CTRL_PERFECT_DODGE")),
-            ("", ""),
-            (t("CTRL_HEADER_DASH"), ""),
-            ("", t("CTRL_DASH_INFO_1")),
-            ("", t("CTRL_DASH_INFO_2")),
             ("", ""),
             (t("CTRL_HEADER_COMBO"), ""),
             ("", t("CTRL_COMBO_INFO_1")),

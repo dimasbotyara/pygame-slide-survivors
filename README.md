@@ -123,3 +123,8 @@ The trainer is optional and keeps its English developer labels. Unlock/reset ach
 - Run the tests: `python -m unittest discover -s tests`.
 - For the optional trainer, run `python cheat_launcher.py` **instead of** `main.py`, then press F1 to open its overlay.
 - The game code is [MIT-licensed](LICENSE). The [bundled fonts](assets/fonts/README.md) have their own licenses.
+
+
+### Saves and settings
+
+The last selected hero is remembered between launches. Set the window size in Settings; dragging the window edge does not resize it. The button at the bottom of Settings can delete high scores, achievements and settings after confirmation, then quit the game. Every field guide tab has a filter (button or F).

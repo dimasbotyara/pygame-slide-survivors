@@ -39,6 +39,10 @@ class SettingsDisplayTests(unittest.TestCase):
     def test_resize_letterboxing_and_mapped_click(self):
         g = self.game
         g.prepare_events([pygame.event.Event(pygame.VIDEORESIZE, w=1000, h=800)])
+        self.assertEqual(g.display.window.get_size(), (1280, 720))
+        self.assertEqual(SettingsManager().get('resolution'), (1280, 720))
+        g.settings_manager.set('resolution', (1000, 800))
+        g.display.apply()
         self.assertEqual(g.display.window.get_size(), (1000, 800))
         self.assertGreater(g.display.viewport.y, 0)
         self.assertEqual(g.display.logical_pos(g.display.viewport.center), (640, 360))

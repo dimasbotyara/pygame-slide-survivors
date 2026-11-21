@@ -60,7 +60,7 @@ DEFAULTS = {
     'terrain_quality': 'medium', 'biome_blend': 220, 'terrain_shading': True,
     'decoration_density': 1, 'animated_decorations': True,
     'entity_shadows': True, 'minimap_pickups': True,
-    'first_launch': True,
+    'first_launch': True, 'selected_hero': 'slider',
 }
 
 
@@ -71,6 +71,8 @@ def valid_value(key, value):
         return (isinstance(value, (list, tuple)) and len(value) == 2
                 and all(type(n) is int for n in value)
                 and 640 <= value[0] <= 7680 and 360 <= value[1] <= 4320)
+    if key == 'selected_hero':
+        return isinstance(value, str) and value in ('slider', 'brawler', 'spark', 'shadow')
     if key == 'first_launch':
         return type(value) is bool
     for _, rows in TABS:

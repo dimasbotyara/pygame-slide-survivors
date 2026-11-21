@@ -22,8 +22,9 @@ from ui import (UI, menu_inputs, menu_rect, pause_rect, hero_rect, upgrade_rect,
 from highscores import add_highscore
 from settings_manager import SettingsManager
 from display_manager import DisplayManager
+from game_icon import make_icon
 from preferences import TABS
-from ui import NUMBER_KEYS, settings_tab_rect
+from ui import NUMBER_KEYS, settings_tab_rect, reset_button_rect, reset_confirm_rect, reset_cancel_rect
 from translations import t
 from heroes import HEROES, HERO_KEYS
 from achievements import AchievementManager
@@ -37,6 +38,7 @@ class Game:
         self.world_seed = world_seed
         pygame.init()
         pygame.display.set_caption(TITLE)
+        pygame.display.set_icon(make_icon())
         self.screen = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
         self.clock = pygame.time.Clock()
         self.running = True
@@ -57,7 +59,7 @@ class Game:
         else:
             self.state = "menu"
 
-        self.selected_hero_index = 0
+        self.selected_hero_index = HERO_KEYS.index(self.settings_manager.get("selected_hero", "slider"))
         self.ult_uses_run = 0
         self.bosses_killed_run = 0
         self.ultimate_cast_pending = False
@@ -89,6 +91,8 @@ class Game:
         self.settings_tab = 0
         self.settings_selection = 0
         self.settings_previous_state = "menu"
+        self.reset_confirmation = False
+        self.reset_error = False
         self.pause_selection = 0
         self.game_over_selection = 0
         self.new_record_pos = -1
@@ -324,6 +328,7 @@ class Game:
                 self.hero_cursor = (self.hero_cursor + 1) % len(HERO_KEYS)
             elif key == pygame.K_RETURN:
                 self.selected_hero_index = self.hero_cursor
+                self.settings_manager.set("selected_hero", HERO_KEYS[self.selected_hero_index])
                 self.menu_selection = 0
                 self.state = "menu"
                 return
@@ -385,6 +390,7 @@ class Game:
             if key in (pygame.K_LEFT, pygame.K_RIGHT):
                 step = 1 if key == pygame.K_RIGHT else -1
                 self.selected_hero_index = (self.selected_hero_index + step) % len(HERO_KEYS)
+                self.settings_manager.set("selected_hero", HERO_KEYS[self.selected_hero_index])
             elif key in (pygame.K_UP, pygame.K_w):
                 self.menu_selection = (self.menu_selection - 1) % 7
             elif key in (pygame.K_DOWN, pygame.K_s):
@@ -434,8 +440,42 @@ class Game:
             self.display.apply()
         self.apply_runtime_settings()
 
+    def delete_user_data(self):
+        # Only delete files owned by the game; never recursively remove a directory.
+        import achievements, highscores, settings_manager
+        errors = []
+        for path in (settings_manager.SETTINGS_FILE, achievements.ACHIEVEMENTS_FILE,
+                     highscores.HIGHSCORES_FILE):
+            try:
+                os.remove(path)
+            except FileNotFoundError:
+                pass
+            except OSError as exc:
+                errors.append(exc)
+        if errors:
+            self.reset_confirmation = False
+            self.reset_error = True
+        else:
+            self.running = False
+
     def update_settings(self, events):
         for event in events:
+            if self.reset_confirmation:
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE:
+                        self.reset_confirmation = False
+                    elif event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
+                        self.delete_user_data()
+                elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    if reset_cancel_rect().collidepoint(event.pos):
+                        self.reset_confirmation = False
+                    elif reset_confirm_rect().collidepoint(event.pos):
+                        self.delete_user_data()
+                continue
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and reset_button_rect().collidepoint(event.pos):
+                self.reset_confirmation = True
+                self.reset_error = False
+                continue
             if event.type == pygame.KEYDOWN and event.key in NUMBER_KEYS:
                 index = NUMBER_KEYS[event.key]
                 if index < len(TABS):
@@ -470,9 +510,13 @@ class Game:
                     self.state = self.settings_previous_state
                     return
                 if key in (pygame.K_UP, pygame.K_w):
-                    self.settings_selection = (self.settings_selection-1) % len(rows)
+                    self.settings_selection = (self.settings_selection-1) % (len(rows)+1)
                 elif key in (pygame.K_DOWN, pygame.K_s):
-                    self.settings_selection = (self.settings_selection+1) % len(rows)
+                    self.settings_selection = (self.settings_selection+1) % (len(rows)+1)
+                elif self.settings_selection == len(rows):
+                    if key in (pygame.K_RETURN, pygame.K_SPACE):
+                        self.reset_confirmation = True
+                        self.reset_error = False
                 elif key in (pygame.K_LEFT, pygame.K_a):
                     self._change_setting(self.settings_selection, -1)
                 elif key in (pygame.K_RIGHT, pygame.K_d, pygame.K_RETURN, pygame.K_SPACE):
@@ -483,7 +527,26 @@ class Game:
         self.ui.draw_settings_screen(self.screen, self.settings_selection, self.settings_manager, self.settings_tab)
         if self.display.error:
             text = self.ui.body.render(t('DISPLAY_FALLBACK'), True, (255, 170, 100))
-            self.screen.blit(text, text.get_rect(center=(SCREEN_WIDTH//2, 645)))
+            self.screen.blit(text, text.get_rect(center=(SCREEN_WIDTH//2, 605)))
+        if self.reset_error:
+            text = self.ui.body.render(t('RESET_ERROR'), True, (255, 130, 120))
+            self.screen.blit(text, text.get_rect(center=(SCREEN_WIDTH//2, 605)))
+        if self.reset_confirmation:
+            shade = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+            shade.fill((0, 0, 0, 190))
+            self.screen.blit(shade, (0, 0))
+            panel = pygame.Rect(300, 260, 680, 220)
+            pygame.draw.rect(self.screen, self.ui.PANEL, panel, border_radius=10)
+            pygame.draw.rect(self.screen, (235, 100, 90), panel, 2, border_radius=10)
+            from ui import word_lines
+            for i, line in enumerate(word_lines(self.ui.body, t('RESET_WARNING'), 620)):
+                text = self.ui.body.render(line, True, self.ui.PAPER)
+                self.screen.blit(text, text.get_rect(center=(640, 300 + i*27)))
+            for rect, key, color in ((reset_confirm_rect(), 'RESET_CONFIRM', (152, 54, 55)),
+                                     (reset_cancel_rect(), 'RESET_CANCEL', self.ui.EDGE)):
+                pygame.draw.rect(self.screen, color, rect, border_radius=6)
+                text = self.ui.body.render(t(key), True, self.ui.PAPER)
+                self.screen.blit(text, text.get_rect(center=rect.center))
 
     # ================================================================
     # ЭКРАН УПРАВЛЕНИЯ
@@ -2588,5 +2651,8 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description=TITLE)
     parser.add_argument('--seed', type=int, help='Reproduce world terrain with this seed')
-    game = Game(world_seed=parser.parse_args().seed)
-    game.run()
+    try:
+        game = Game(world_seed=parser.parse_args().seed)
+        game.run()
+    except KeyboardInterrupt:
+        pygame.quit()

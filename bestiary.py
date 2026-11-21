@@ -1,7 +1,6 @@
 """Offline field guide: enemies, temporary/permanent upgrades, hero abilities.
 
-Tabs replace the old enemy-only filter row. The enemy filter survives as a
-single separate button (right of the tabs) that cycles on click / F.
+Each tab has its own filter button (right of the tabs), cycled on click / F.
 All numbers come from the same objects used in a run.
 """
 import math
@@ -34,6 +33,14 @@ UPGRADE_MAP = {u.upgrade_id: u for u in _ALL_UPGRADES}
 PERMANENT_KEYS = tuple(u.upgrade_id for u in _ALL_UPGRADES if u.category != 'hero')
 HERO_UPGRADE_KEYS = tuple(u.upgrade_id for u in _ALL_UPGRADES if u.category == 'hero')
 ABILITY_KEYS = tuple(HERO_KEYS)
+TAB_FILTERS = {
+    'enemies': FILTERS,
+    'temporary': ('all', 'tonics', 'pickups'),
+    'permanent': ('all', 'basic', 'fist', 'slide', 'utility'),
+    'abilities': ('all',) + tuple(HERO_KEYS),
+    'hero_upgrades': ('all',) + tuple(HERO_KEYS),
+}
+
 
 _CATEGORY_LABELS = {'fist': 'CAT_COMBAT', 'hero': 'CAT_HERO', 'slide': 'CAT_SLIDE',
                     'utility': 'CAT_SPECIAL', 'basic': 'CAT_BASIC'}
@@ -129,16 +136,21 @@ class Bestiary:
     @property
     def entries(self):
         tab = TABS[self.tab]
+        selected = TAB_FILTERS[tab][self.filter % len(TAB_FILTERS[tab])]
+        keys = {'enemies': ENTRY_KEYS, 'temporary': TEMPORARY_KEYS,
+                'permanent': PERMANENT_KEYS, 'abilities': ABILITY_KEYS,
+                'hero_upgrades': HERO_UPGRADE_KEYS}[tab]
+        if selected == 'all':
+            return list(keys)
         if tab == 'enemies':
-            selected = FILTERS[self.filter]
-            return [key for key in ENTRY_KEYS if selected == 'all' or category(key) == selected]
+            return [key for key in keys if category(key) == selected]
         if tab == 'temporary':
-            return list(TEMPORARY_KEYS)
+            return [key for key in keys if (key in TONICS) == (selected == 'tonics')]
         if tab == 'permanent':
-            return list(PERMANENT_KEYS)
+            return [key for key in keys if UPGRADE_MAP[key].category == selected]
         if tab == 'abilities':
-            return list(ABILITY_KEYS)
-        return list(HERO_UPGRADE_KEYS)
+            return [key for key in keys if key == selected]
+        return [key for key in keys if UPGRADE_MAP[key].hero_id == selected]
 
     @property
     def key(self):
@@ -331,10 +343,16 @@ class Bestiary:
     def move(self, amount):
         self.cursor = max(0, min(len(self.entries) - 1, self.cursor + amount))
 
+    def filter_label(self):
+        key = TAB_FILTERS[TABS[self.tab]][self.filter]
+        if key in HERO_KEYS:
+            return t('hero_' + key + '_name')
+        if key in _CATEGORY_LABELS:
+            return t(_CATEGORY_LABELS[key])
+        return t('GUIDE_FILTER_' + key)
+
     def cycle_filter(self):
-        if TABS[self.tab] != 'enemies':
-            return
-        self.filter = (self.filter + 1) % len(FILTERS)
+        self.filter = (self.filter + 1) % len(TAB_FILTERS[TABS[self.tab]])
         self.cursor = 0
 
     def handle(self, events):
@@ -345,7 +363,7 @@ class Bestiary:
                 if key == pygame.K_ESCAPE:
                     return True
                 if key in NUMBER_KEYS and NUMBER_KEYS[key] < len(TABS):
-                    self.tab, self.cursor = NUMBER_KEYS[key], 0
+                    self.tab, self.cursor, self.filter = NUMBER_KEYS[key], 0, 0
                 elif key == pygame.K_f:
                     self.cycle_filter()
                 elif key in (pygame.K_UP, pygame.K_w):
@@ -362,7 +380,7 @@ class Bestiary:
                     self.cursor = len(self.entries) - 1
                 elif key == pygame.K_TAB:
                     step = -1 if getattr(event, 'mod', 0) & pygame.KMOD_SHIFT else 1
-                    self.tab, self.cursor = (self.tab + step) % len(TABS), 0
+                    self.tab, self.cursor, self.filter = (self.tab + step) % len(TABS), 0, 0
             elif event.type == pygame.MOUSEWHEEL:
                 self.move(-event.y)
             elif event.type == pygame.MOUSEBUTTONDOWN:
@@ -373,7 +391,7 @@ class Bestiary:
                         return True
                     for i in range(len(TABS)):
                         if tab_rect(i).collidepoint(event.pos):
-                            self.tab, self.cursor = i, 0
+                            self.tab, self.cursor, self.filter = i, 0, 0
                             break
                     if filter_button_rect().collidepoint(event.pos):
                         self.cycle_filter()
@@ -405,14 +423,13 @@ class Bestiary:
             screen.blit(number, number.get_rect(midleft=(rect.left + 10, rect.centery)))
             label = ui.fitted_text(t('GUIDE_TAB_' + tab), INK if selected else PAPER, rect.w - 52, 22, 16)
             screen.blit(label, label.get_rect(midleft=(rect.left + 42, rect.centery)))
-        # Enemy filter lives in its own separate button, right of the tabs.
-        if TABS[self.tab] == 'enemies':
-            rect = filter_button_rect()
-            pygame.draw.rect(screen, PANEL, rect, border_radius=6)
-            pygame.draw.rect(screen, MINT, rect, 1, border_radius=6)
-            label = ui.fitted_text(t('GUIDE_FILTER_BUTTON', t('GUIDE_FILTER_' + FILTERS[self.filter])),
-                                   MINT, rect.w - 20, 22, 16)
-            screen.blit(label, label.get_rect(center=rect.center))
+        # Filter for the current tab.
+        rect = filter_button_rect()
+        pygame.draw.rect(screen, PANEL, rect, border_radius=6)
+        pygame.draw.rect(screen, MINT, rect, 1, border_radius=6)
+        label = ui.fitted_text(t('GUIDE_FILTER_BUTTON', self.filter_label()),
+                               MINT, rect.w - 20, 22, 16)
+        screen.blit(label, label.get_rect(center=rect.center))
         entries = self.entries
         start = self.cursor // PAGE_SIZE * PAGE_SIZE
         for i, key in enumerate(entries[start:start + PAGE_SIZE]):
