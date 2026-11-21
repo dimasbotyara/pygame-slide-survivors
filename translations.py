@@ -306,16 +306,16 @@ TRANSLATIONS = {
 
         # Hero Ultimates
         "ult_chrono_slide_name": "Хроно-Рывок",
-        "ult_chrono_slide_desc": "Слайдер собирает энергию времени, высвобождая волну, которая отбрасывает ближайших врагов. Затем герой срывается в хронорывок: становится неуязвимым, скользит быстрее и оставляет за собой шлейф кинетических разрядов.",
+        "ult_chrono_slide_desc": "На две секунды Слайдер автоматически и без остановки рикошетит сквозь случайных врагов поблизости, затем скользит обратно к месту старта. Если врагов рядом нет, возвращается половина заряда; после ульты скольжение уходит на перезарядку, а скорость героя повышается на пять секунд.",
 
         "ult_earthquake_slam_name": "Дрожь Земли",
-        "ult_earthquake_slam_desc": "Кулак бойца обрушивается на арену, и под ногами расходится сеть раскалённых трещин. Ударная волна отбрасывает врагов; павшие тела взлетают в воздух и становятся снарядами. Каждый обломок, попавший в противника, порождает новую волну сокрушительного эха.",
+        "ult_earthquake_slam_desc": "Кулак бойца обрушивается на арену, и под ногами расходится сеть тёмных трещин на огромную область. Ударная волна отбрасывает врагов; павшие тела взлетают в воздух и становятся снарядами. Трещины остаются на земле на пятнадцать секунд, а затем плавно исчезают.",
 
         "ult_chain_lightning_name": "Цепной Шторм",
-        "ult_chain_lightning_desc": "Молния разрывает ткань небес и призывает двенадцать разрядов древнего божества. Они пронзают врагов и скачут от цели к цели, оставляя на земле пульсирующие штормовые разломы. Их эпицентры испепеляют противников и оглушают каждого, кто осмелится войти в бурю.",
+        "ult_chain_lightning_desc": "После удара Молнии на десять секунд наступает грозовая тьма: небо затягивают тучи, начинается дождь, а враги вокруг героя регулярно поражаются молниями. Затем дождь и тьма плавно отступают, и цвета возвращаются.",
 
         "ult_shadow_dance_name": "Танец Теней",
-        "ult_shadow_dance_desc": "Тень растворяется во вспышке лилового дыма и возникает за спинами врагов. До десяти быстрых рассечений проходят сквозь толпу, оставляя призрачные следы и вытягивая жизненную силу. Последний удар переносит героя в новую точку боя.",
+        "ult_shadow_dance_desc": "Вокруг Тени появляются два клинка. Первый мгновенно начинает вращаться по часовой стрелке, второй присоединяется через 0,2 секунды и вращается в обратную сторону. Каждый делает четыре оборота, поражая врагов и вытягивая жизненную силу.",
 
         # Achievements Screen
         "ACH_TITLE": "ДОСТИЖЕНИЯ",
@@ -879,16 +879,16 @@ TRANSLATIONS = {
 
         # Hero Ultimates
         "ult_chrono_slide_name": "Chrono Slide",
-        "ult_chrono_slide_desc": "Slider gathers the force of time and releases a pulse that scatters nearby foes. Then the hero tears across the arena in a chrono-slide: briefly invulnerable, faster than ever, and trailing kinetic aftershocks.",
+        "ult_chrono_slide_desc": "For two seconds, Slider automatically ricochets nonstop through random nearby enemies, then slides back to the starting point. If no foes are nearby, half the ultimate charge is refunded. Afterward, slide recharges and the hero gains bonus speed for five seconds.",
 
         "ult_earthquake_slam_name": "Earthquake Slam",
-        "ult_earthquake_slam_desc": "The Brawler's fist crashes into the arena, splitting the ground with molten fractures. The shockwave hurls enemies away; those it fells are flung through the air as living projectiles. Every body that strikes another foe unleashes a fresh echo of crushing force.",
+        "ult_earthquake_slam_desc": "The Brawler's fist crashes into the arena, sending a web of dark cracks across a huge area. The shockwave hurls enemies away; those it fells become projectiles. The cracks remain on the ground for fifteen seconds, then fade smoothly.",
 
         "ult_chain_lightning_name": "Chain Lightning",
-        "ult_chain_lightning_desc": "Spark tears open the sky and calls down twelve bolts from an ancient storm god. They pierce the horde and leap from target to target, leaving pulsing storm rifts in the ground. Each rift burns and stuns anything reckless enough to enter its eye.",
+        "ult_chain_lightning_desc": "After Spark's strike, a ten-second storm darkens the map almost completely and brings rain. Enemies around the hero are repeatedly struck by lightning; then the rain and darkness fade away and the colors return.",
 
         "ult_shadow_dance_name": "Shadow Dance",
-        "ult_shadow_dance_desc": "Shadow dissolves into violet smoke, then appears behind the enemy line. Up to ten swift cuts carve through the horde, leaving ghostly trails and stealing life with every strike. The final slash carries the hero to a new point in the fight.",
+        "ult_shadow_dance_desc": "Two blades appear around Shadow. One instantly spins clockwise; the other joins 0.2 seconds later and spins counterclockwise. Each completes four turns, striking enemies and stealing life.",
 
         # Achievements Screen
         "ACH_TITLE": "ACHIEVEMENTS",

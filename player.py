@@ -126,6 +126,7 @@ class Player:
         self.ult_cooldown_timer = 0.0
         self.ult_cast_timer = 0.0
         self.ult_cast_duration = 0.0
+        self.ultimate_action_lock = False
         self.total_slides_count = 0
         self.shield_hp = 0.0
         self.shield_regen_timer = 0.0
@@ -380,7 +381,7 @@ class Player:
         self.update_tonics(dt)
         self.time_alive += dt
         self.body_anim_timer += dt
-        cast_locked = self.ult_cast_timer > 0
+        cast_locked = self.ult_cast_timer > 0 or self.ultimate_action_lock
         self.ult_cast_timer = max(0.0, self.ult_cast_timer - dt)
         if self.ult_cast_timer < 1e-7:
             self.ult_cast_timer = 0.0
@@ -1111,10 +1112,8 @@ class Player:
     def resolve_hero_ult(self, hero_id, camera, particle_manager):
         """Apply the caster-specific buffs/impact VFX after its wind-up."""
         if hero_id == "slider":
-            self.slide_charges = self.slide_max_charges
+            # The dash chain handles its own post-ult slide cooldown and speed buff.
             self.invincible_timer = 3.4
-            self.speed_boost_timer = 3.6
-            self.speed_boost_multiplier = 2.35
             camera.add_shake(15, .55)
             particle_manager.spawn_bomb_particles(self.x, self.y, count=90)
         elif hero_id == "brawler":
