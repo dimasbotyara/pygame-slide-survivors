@@ -65,6 +65,20 @@ class HeroAnimationTests(unittest.TestCase):
             self.assertEqual(complete, self.card_pixels())
         self.assertIsNone(g.player)
 
+    def test_theme_switch_transition_does_not_carry_old_panel_as_a_dark_square(self):
+        g = self.game
+        with patch('pygame.time.get_ticks', return_value=1000):
+            g.draw_menu()
+        old_panel = g.ui.PANEL
+        g.update_menu([pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RIGHT)])
+        with patch('pygame.time.get_ticks', return_value=1100):
+            g.draw_menu()
+        self.assertNotEqual(old_panel, g.ui.PANEL)
+        # This corner is inside the animated viewport but outside the hero art.
+        # It must show the newly themed card background, not an old-theme tile.
+        self.assertEqual(tuple(g.screen.get_at((770, 265))[:3]), g.ui.PANEL)
+        self.assertEqual(tuple(g.ui._hero_card.get_colorkey()[:3]), g.ui.PANEL)
+
     def test_arrow_click_wraps_and_animates_in_both_directions(self):
         g = self.game
         with patch('pygame.time.get_ticks', return_value=1000):

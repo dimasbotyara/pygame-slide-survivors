@@ -174,8 +174,18 @@ class BestiaryTests(unittest.TestCase):
         self.assertTrue(all(all_upgrades[k].category != 'hero' for k in PERMANENT_KEYS))
         self.assertEqual(set(ABILITY_KEYS), set(HEROES))
         self.assertTrue(set(TONICS) <= set(TEMPORARY_KEYS))
+        for hero_id, hero in HEROES.items():
+            exclusive = {u.upgrade_id for u in all_upgrades.values()
+                         if u.hero_id == hero_id}
+            self.assertEqual(set(hero['hero_upgrades']), exclusive)
+            self.assertEqual(len(exclusive), 5)
         for lang in ('ru', 'en'):
             set_language(lang)
+            for upgrade in all_upgrades.values():
+                if upgrade.category != 'hero':
+                    continue
+                self.assertIn(f'upgrade_{upgrade.upgrade_id}_name', TRANSLATIONS[lang])
+                self.assertIn(f'upgrade_{upgrade.upgrade_id}_desc', TRANSLATIONS[lang])
             for tab in TABS:
                 self.assertNotEqual(t('GUIDE_TAB_' + tab), 'GUIDE_TAB_' + tab)
             for index, tab in enumerate(TABS):
