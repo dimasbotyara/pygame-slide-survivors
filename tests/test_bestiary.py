@@ -14,7 +14,7 @@ from bestiary import (Bestiary, ENTRY_KEYS, FILTERS, PAGE_SIZE, TABS, TEMPORARY_
                       PERMANENT_KEYS, HERO_UPGRADE_KEYS, ABILITY_KEYS, base_enemy, category,
                       facts, guide_rect, back_rect, filter_rect, filter_button_rect,
                       tab_rect, row_rect, page_rect, name)
-from enemies import Enemy, Boss
+from enemies import Enemy, Boss, BOSS_KEYS
 from main import Game
 from settings import ENEMY_TYPES
 from translations import TRANSLATIONS, set_language, t
@@ -43,14 +43,14 @@ class BestiaryTests(unittest.TestCase):
         self.guide = Bestiary()
 
     def test_every_spawnable_type_is_covered_once_and_translated(self):
-        self.assertEqual(set(ENTRY_KEYS), set(ENEMY_TYPES) | set(RESIDENTS) | {'boss'})
+        self.assertEqual(set(ENTRY_KEYS), set(ENEMY_TYPES) | set(RESIDENTS) | set(BOSS_KEYS))
         self.assertEqual(len(ENTRY_KEYS), len(set(ENTRY_KEYS)))
         for lang in ('ru', 'en'):
             set_language(lang)
             for key in ENTRY_KEYS:
                 e = self.guide.enemy(key)
                 self.assertIn('MOB_'+key, TRANSLATIONS[lang])
-                desc = 'GUIDE_BEHAVIOR_'+('boss' if key == 'boss' else e.archetype)
+                desc = 'GUIDE_BEHAVIOR_'+(key if key in BOSS_KEYS else e.archetype)
                 self.assertIn(desc, TRANSLATIONS[lang])
                 self.assertNotIn('GUIDE_', ' '.join(facts(key, e)))
                 if e.home_biome:
@@ -101,7 +101,7 @@ class BestiaryTests(unittest.TestCase):
         b.handle([press(pygame.K_f)])
         self.assertEqual(set(b.entries), set(RESIDENTS))
         b.handle([press(pygame.K_f)])
-        self.assertEqual(set(b.entries), {'boss'})
+        self.assertEqual(set(b.entries), set(BOSS_KEYS))
         b.handle([press(pygame.K_f)])
         self.assertEqual(b.filter, 0)
         # Tabs replace the old filter row: 1-5 / Tab / click select a tab.
@@ -153,7 +153,7 @@ class BestiaryTests(unittest.TestCase):
                 self.assertLessEqual(b.icon(key).get_width(), 40)
                 self.assertLess(ui.font_medium.size(name(key))[0], 746)
                 e = b.enemy(key)
-                desc = t('GUIDE_BEHAVIOR_'+('boss' if key == 'boss' else e.archetype))
+                desc = t('GUIDE_BEHAVIOR_'+(key if key in BOSS_KEYS else e.archetype))
                 self.assertLessEqual(484+24*len(list(word_lines(ui.body, desc, 746))), 628)
                 self.assertLessEqual(len(facts(key, e)), 8)
                 self.assertLessEqual(593+21*len(list(word_lines(ui.font_small, t('GUIDE_NATIVE_RULE'), 746))), 646)

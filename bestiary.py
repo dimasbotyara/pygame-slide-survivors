@@ -9,7 +9,7 @@ import pygame
 
 from camera import Camera
 from consumables import TONICS, TONIC_IDS
-from enemies import Enemy, Boss
+from enemies import Enemy, Boss, BOSS_KEYS
 from heroes import HEROES, HERO_KEYS
 from settings import (ENEMY_TYPES, BOSS_SPAWN_INTERVAL, EXPLOSION_FUSE,
                       GREEN, PURPLE, RED, CYAN)
@@ -19,7 +19,7 @@ from wildlife import RESIDENTS
 from translations import t
 from ui import INK, PANEL, EDGE, MUTED, MINT, PAPER, NUMBER_KEYS, word_lines, bestiary_rect as guide_rect
 
-ENTRY_KEYS = tuple(ENEMY_TYPES) + tuple(RESIDENTS) + ('boss',)
+ENTRY_KEYS = tuple(ENEMY_TYPES) + tuple(RESIDENTS) + BOSS_KEYS
 PAGE_SIZE = 9
 FILTERS = ('all', 'regular', 'resident', 'boss')
 TABS = ('enemies', 'temporary', 'permanent', 'abilities', 'hero_upgrades')
@@ -50,7 +50,7 @@ _TAB_NOTES = {'enemies': 'GUIDE_BASE_NOTE', 'temporary': 'GUIDE_TEMPORARY_NOTE',
 
 
 def category(key):
-    return 'boss' if key == 'boss' else 'resident' if key in RESIDENTS else 'regular'
+    return 'boss' if key in BOSS_KEYS else 'resident' if key in RESIDENTS else 'regular'
 
 
 def back_rect():
@@ -88,7 +88,7 @@ def base_enemy(key):
     # Opening the guide must never advance the run's random stream.
     state = random.getstate()
     try:
-        return Boss(96, 96) if key == 'boss' else Enemy(96, 96, key)
+        return Boss(96, 96, variant=key) if key in BOSS_KEYS else Enemy(96, 96, key)
     finally:
         random.setstate(state)
 
@@ -104,7 +104,7 @@ def facts(key, enemy):
         rows.append(t('GUIDE_SHOTS', len(e.shot_offsets), f'{e.shoot_speed:g}'))
     if e.home_biome:
         rows.append(t('GUIDE_HOME', t('BIOME_' + e.home_biome)))
-    elif key == 'boss':
+    elif key in BOSS_KEYS:
         rows.append(t('GUIDE_BOSS_TIME', BOSS_SPAWN_INTERVAL))
         rows.append(t('GUIDE_ANY_BIOME'))
     else:
@@ -213,7 +213,7 @@ class Bestiary:
         tab = TABS[self.tab]
         if tab == 'enemies':
             e = self.enemy(key)
-            return t('GUIDE_BEHAVIOR_' + ('boss' if key == 'boss' else e.archetype))
+            return t('GUIDE_BEHAVIOR_' + (key if key in BOSS_KEYS else e.archetype))
         if tab == 'temporary':
             if key in TONICS:
                 tonic = TONICS[key]

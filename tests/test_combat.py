@@ -115,7 +115,7 @@ class CombatTests(unittest.TestCase):
         self.assertEqual((p.fist_total_hits, p.fist_combo_index), (1, 0))
 
     def test_utility_upgrades_and_translations(self):
-        for key in ('combo_grace', 'ult_per_kill', 'hit_grace', 'boost_duration', 'dash_heal', 'cleave'):
+        for key in ('combo_grace', 'ult_per_kill', 'hit_grace', 'boost_duration', 'cleave'):
             self.equip(key)
             for strings in TRANSLATIONS.values():
                 for suffix in ('name', 'desc'):
@@ -127,11 +127,6 @@ class CombatTests(unittest.TestCase):
         self.assertEqual(self.player.speed_boost_timer, SPEED_BOOST_DURATION + 2)
         self.player.take_damage(20)
         self.assertAlmostEqual(self.player.invincible_timer, 0.65)
-        hp = self.player.hp
-        self.game.enemies = [Enemy(30, 0, 'tank'), Enemy(35, 0, 'tank')]
-        self.player.dash_attack_active = True
-        self.game.check_dash_attack()
-        self.assertEqual(self.player.hp, hp + 3)
 
     def test_boss_and_new_enemies_update_and_draw(self):
         self.game.enemies = [Boss(50, 0)] + [Enemy(45, 0, kind) for kind in ('prism', 'crusher', 'skirmisher')]

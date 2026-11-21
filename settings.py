@@ -68,14 +68,6 @@ SLIDE_SPEED_DAMAGE_MULTIPLIER = 0.05
 SLIDE_TRAIL_DURATION = 2.0
 
 # ============================================================
-# DASH-АТАКА
-# ============================================================
-DASH_ATTACK_WINDOW = 0.5
-DASH_ATTACK_DAMAGE_MULTIPLIER = 3.0
-DASH_ATTACK_RANGE_MULTIPLIER = 1.5
-DASH_ATTACK_ARC = 360
-
-# ============================================================
 # УВОРОТ, ЛЁД И АУРЫ
 # ============================================================
 PERFECT_DODGE_WINDOW = 0.16

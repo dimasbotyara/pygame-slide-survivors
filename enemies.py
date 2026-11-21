@@ -169,6 +169,23 @@ class Enemy:
             c, s = math.cos(angle), math.sin(angle)
             dir_x, dir_y = dir_x * c - dir_y * s, dir_x * s + dir_y * c
 
+        # Biome wildlife has recognisable movement, without changing attacks.
+        if self.home_biome and dist > 1:
+            if self.enemy_type in ('clover_moth', 'echo_bat', 'rune_wisp'):
+                angle = math.sin(self.anim_timer * 4) * .55
+                c, s = math.cos(angle), math.sin(angle)
+                dir_x, dir_y = dir_x*c-dir_y*s, dir_x*s+dir_y*c
+            elif self.enemy_type in ('tide_crab', 'sand_scorpion'):
+                angle = math.sin(self.anim_timer * 2.5) * .75
+                c, s = math.cos(angle), math.sin(angle)
+                dir_x, dir_y = dir_x*c-dir_y*s, dir_x*s+dir_y*c
+            elif self.enemy_type in ('reed_toad', 'rime_lynx'):
+                current_speed *= 1.5 if math.sin(self.anim_timer * 5) > 0 else .35
+            elif self.enemy_type in ('gear_mite', 'cinder_slug'):
+                current_speed *= .8 + .2 * math.sin(self.anim_timer * 3)
+            elif self.enemy_type == 'thorn_stag' and self.is_sprinting:
+                current_speed *= 1.1
+        self.speed = current_speed
         if should_move and self.windup_left <= 0:
             if self.on_ice:
                 # Carry the incoming heading across the ice, not the new target heading.
@@ -552,20 +569,40 @@ class Enemy:
         pygame.draw.circle(screen, BLACK, (sx + 3, sy - 2), 1)
 
 
-class Boss(Enemy):
-    def __init__(self, x, y, difficulty_multiplier=1.0):
-        super().__init__(x, y, "zombie", difficulty_multiplier)
+# Boss order rotates deterministically between encounters in a run.
+BOSS_VARIANTS = {
+    'boss': dict(color=(110, 67, 137), glow=(98, 235, 229), speed=40, hp=1.0, reach=65, shots=()),
+    'boss_ember': dict(color=(181, 75, 45), glow=(255, 196, 65), speed=52, hp=.85, reach=80, shots=()),
+    'boss_glacier': dict(color=(79, 138, 182), glow=(192, 250, 255), speed=30, hp=1.25, reach=85, shots=()),
+    'boss_storm': dict(color=(178, 144, 49), glow=(255, 241, 125), speed=48, hp=.9, reach=280, shots=(-.32, 0, .32)),
+    'boss_grove': dict(color=(72, 140, 80), glow=(190, 255, 137), speed=35, hp=1.1, reach=250, shots=(-.16, .16)),
+}
+BOSS_KEYS = tuple(BOSS_VARIANTS)
 
-        self.enemy_type = "boss"
-        self.max_hp = BOSS_HP * difficulty_multiplier
+
+class Boss(Enemy):
+    def __init__(self, x, y, difficulty_multiplier=1.0, variant='boss'):
+        super().__init__(x, y, "zombie", difficulty_multiplier)
+        if variant not in BOSS_VARIANTS:
+            raise ValueError(variant)
+        self.variant = variant
+        spec = BOSS_VARIANTS[variant]
+
+        self.enemy_type = variant
+        self.max_hp = BOSS_HP * difficulty_multiplier * spec["hp"]
         self.hp = self.max_hp
-        self.base_speed = BOSS_SPEED
-        self.speed = BOSS_SPEED
+        self.base_speed = spec["speed"]
+        self.speed = spec["speed"]
         self.damage = BOSS_DAMAGE * difficulty_multiplier
         self.size = BOSS_SIZE
-        self.strike_radius = BOSS_SIZE + 20
-        self.windup_duration = 0.375
-        self.color = BOSS_COLOR
+        self.strike_radius = spec['reach'] if not spec['shots'] else BOSS_SIZE + 20
+        self.windup_duration = 0.65 if spec['shots'] else {"boss": .55, "boss_ember": .38, "boss_glacier": .85}[variant]
+        if spec['shots']:
+            self.shoot_range = spec['reach']
+            self.shoot_speed = 220
+            self.shoot_cooldown_max = 2.5
+            self.shot_offsets = spec['shots']
+        self.color = spec['color']
         self.outline_color = BOSS_OUTLINE_COLOR
         self.xp_reward = BOSS_XP
         self.knockback_resist = BOSS_KNOCKBACK_RESIST
@@ -580,6 +617,12 @@ class Boss(Enemy):
         self.arena_center_y = y
         self.arena_active = True
 
+    @property
+    def attack_cooldown(self):
+        if self.shoot_range:
+            return self.shoot_cooldown_max
+        return {'boss': 1.0, 'boss_ember': .65, 'boss_glacier': 1.5}.get(self.variant, 1.0) * (.7 if self.is_enraged else 1)
+
     def set_arena_center(self, px, py):
         """Установить центр арены на позицию игрока при спавне босса"""
         self.arena_center_x = px
@@ -591,7 +634,16 @@ class Boss(Enemy):
         if self.hp / self.max_hp < 0.5 and not self.phase_2_triggered:
             self.phase_2_triggered = True
             self.is_enraged = True
-            self.base_speed = BOSS_SPEED * 1.3
+            self.base_speed = BOSS_VARIANTS[self.variant]["speed"] * 1.3
+            if self.variant == 'boss':
+                # The original guardian reveals a fan of bolts in phase two.
+                self.shoot_range = 240
+                self.shoot_speed = 190
+                self.shot_offsets = (-.28, 0, .28)
+                self.windup_duration = .7
+                self.shoot_cooldown_max = 2.2
+            elif self.shoot_range:
+                self.shoot_cooldown_max = 1.7
             self.color = CRIMSON
             if game_messages is not None:
                 game_messages.append(t("BOSS_PHASE_2"))
@@ -620,12 +672,39 @@ class Boss(Enemy):
         pygame.draw.circle(aura_s, (150, 0, 200, 30), (aura_r, aura_r), aura_r)
         screen.blit(aura_s, (sx - aura_r, sy - aura_r))
 
+        # Each boss has a moving silhouette, keyed to its own palette.
+        pulse = int(math.sin(self.anim_timer * 4) * 4)
+        if self.variant != 'boss':
+            for i in range(4 if self.variant in ('boss_storm', 'boss_grove') else 3):
+                a = self.anim_timer * (1.5 if self.variant == 'boss_storm' else .6) + i * math.tau / (4 if self.variant in ('boss_storm', 'boss_grove') else 3)
+                x, y = sx + int(math.cos(a)* (50+pulse)), sy + int(math.sin(a)*(50+pulse))
+                color = BOSS_VARIANTS[self.variant]['glow']
+                pygame.draw.polygon(screen, color, [(x,y-9),(x+7,y),(x,y+9),(x-7,y)])
         # Armoured void sentinel: horns, layered plates and a glowing core.
         dark = (35, 24, 51)
-        armor = (110, 67, 137) if not self.is_enraged else (150, 50, 73)
-        glow = (98, 235, 229) if not self.is_enraged else (255, 157, 70)
+        armor = BOSS_VARIANTS[self.variant]["color"] if not self.is_enraged else (150, 50, 73)
+        glow = BOSS_VARIANTS[self.variant]["glow"] if not self.is_enraged else (255, 157, 70)
         if self.flash_timer > 0:
             armor = WHITE
+        if self.variant == 'boss_ember':
+            pygame.draw.polygon(screen, (255, 157, 53), [(sx-42,sy+22),(sx-49,sy-7-pulse),(sx-34,sy+4),
+                                                        (sx-25,sy-48-pulse),(sx-14,sy-28),(sx,sy-58-pulse),
+                                                        (sx+15,sy-28),(sx+25,sy-48-pulse),(sx+35,sy+4),
+                                                        (sx+49,sy-7-pulse),(sx+42,sy+22)])
+        elif self.variant == 'boss_glacier':
+            for side in (-1, 1):
+                pygame.draw.polygon(screen, (125, 219, 250), [(sx+side*27,sy-18),(sx+side*57,sy-43-pulse),
+                                                             (sx+side*48,sy+19),(sx+side*30,sy+28)])
+        elif self.variant == 'boss_storm':
+            for side in (-1, 1):
+                pygame.draw.polygon(screen, (255, 230, 99), [(sx+side*31,sy-24),(sx+side*57,sy-36),
+                                                             (sx+side*45,sy-4),(sx+side*58,sy+5),
+                                                             (sx+side*33,sy+31)])
+        elif self.variant == 'boss_grove':
+            for side in (-1, 1):
+                pygame.draw.lines(screen, (135, 207, 102), False, [(sx+side*22,sy-30),
+                                  (sx+side*37,sy-49-pulse),(sx+side*47,sy-55-pulse)], 5)
+                pygame.draw.line(screen, (135, 207, 102), (sx+side*37,sy-49-pulse), (sx+side*34,sy-61-pulse), 4)
         pygame.draw.polygon(screen, dark, [(sx-32,sy-24),(sx-48,sy-56),(sx-39,sy-8),
                                           (sx+39,sy-8),(sx+48,sy-56),(sx+32,sy-24)])
         pygame.draw.polygon(screen, armor, [(sx-38,sy-22),(sx-27,sy-39),(sx,sy-45),
@@ -661,7 +740,7 @@ class Boss(Enemy):
 
         # Имя
         font = face("display", 14)
-        name = font.render(t("MOB_boss"), True, GOLD)
+        name = font.render(t("MOB_" + self.variant), True, GOLD)
         screen.blit(name, (sx - name.get_width() // 2, bar_y - 18))
 
     def draw_arena(self, screen, camera):
@@ -735,6 +814,7 @@ class EnemySpawner:
         self.world = world
         self.spawn_timer = 0.0
         self.boss_timer = 0.0
+        self.boss_index = 0
         self.game_time = 0.0
         self.difficulty_multiplier = 1.0
 
@@ -772,7 +852,7 @@ class EnemySpawner:
                 if enemy:
                     enemies.append(enemy)
 
-        if self.boss_timer >= BOSS_SPAWN_INTERVAL:
+        if self.boss_timer >= BOSS_SPAWN_INTERVAL and not any(e.alive and e.is_boss for e in enemies):
             self.boss_timer = 0
             boss = self.spawn_boss(player_x, player_y)
             boss.set_arena_center(player_x, player_y)
@@ -817,4 +897,6 @@ class EnemySpawner:
         dist = ENEMY_SPAWN_RADIUS_MAX * 0.7
         spawn_x = player_x + math.cos(angle) * dist
         spawn_y = player_y + math.sin(angle) * dist
-        return Boss(spawn_x, spawn_y, self.difficulty_multiplier)
+        variant = BOSS_KEYS[self.boss_index % len(BOSS_KEYS)]
+        self.boss_index += 1
+        return Boss(spawn_x, spawn_y, self.difficulty_multiplier, variant)

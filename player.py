@@ -5,6 +5,7 @@ import math
 import random as rng_module
 from settings import *
 from heroes import get_hero_data
+from preferences import BINDINGS
 from consumables import TONICS, TONIC_BY_STAT
 
 
@@ -80,6 +81,7 @@ class Player:
 
         hero_data = get_hero_data(hero_id)
         self.hero_id = hero_id
+        self.bindings = dict(BINDINGS)
         self.hero_data = hero_data
 
         self.max_hp = hero_data["base_hp"]
@@ -118,7 +120,7 @@ class Player:
             "heal_on_kills": 0,
             "ice_trail": 0, "repulse_aura": 0, "drain_aura": 0, "stasis_aura": 0,
             "cleave": 0, "combo_grace": 0, "ult_per_kill": 0,
-            "hit_grace": 0, "boost_duration": 0, "dash_heal": 0,
+            "hit_grace": 0, "boost_duration": 0,
         }
 
         # Ультимейт, щит и статистика
@@ -150,14 +152,6 @@ class Player:
         self.slide_angle = 0.0
         self.slide_was_pressed = False
         self.slide_needs_repress = False
-
-        # Dash
-        self.dash_attack_window_timer = 0.0
-        self.dash_attack_active = False
-        self.dash_attack_timer = 0.0
-        self.dash_attack_duration = 0.2
-        self.dash_attack_hit_enemies = []
-        self.dash_attack_triggered = False
 
         # Kill комбо
         self.combo_count = 0
@@ -360,12 +354,6 @@ class Player:
     def get_combo_xp_bonus(self):
         return min(self.combo_count * COMBO_XP_BONUS_PER_STACK, COMBO_MAX_MULTIPLIER)
 
-    def get_dash_attack_damage(self):
-        return self.get_fist_damage() * DASH_ATTACK_DAMAGE_MULTIPLIER
-
-    def get_dash_attack_range(self):
-        return self.get_fist_range() * DASH_ATTACK_RANGE_MULTIPLIER
-
     def get_rage_intensity(self):
         if self.stats["fist_rage"] <= 0:
             return 0.0
@@ -410,17 +398,6 @@ class Player:
             if self.combo_timer <= 0:
                 self.combo_count = 0
                 self.combo_timer = 0.0
-
-        if self.dash_attack_window_timer > 0:
-            self.dash_attack_window_timer -= dt
-            if self.dash_attack_window_timer <= 0:
-                self.dash_attack_triggered = False
-
-        if self.dash_attack_active:
-            self.dash_attack_timer -= dt
-            if self.dash_attack_timer <= 0:
-                self.dash_attack_active = False
-                self.dash_attack_hit_enemies = []
 
         if self.counter_attack_active:
             self.counter_attack_timer -= dt
@@ -512,10 +489,9 @@ class Player:
             self.slide_current_speed = 0.0
             self.velocity_x = self.velocity_y = 0.0
             self.current_speed = 0.0
-            self.dash_attack_active = False
             self.fist_attack_active = False
         else:
-            slide_pressed = keys[pygame.K_SPACE] or keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]
+            slide_pressed = keys[self.bindings["bind_slide"]] or (self.bindings["bind_slide"] == pygame.K_SPACE and ((pygame.K_LSHIFT not in self.bindings.values() and keys[pygame.K_LSHIFT]) or (pygame.K_RSHIFT not in self.bindings.values() and keys[pygame.K_RSHIFT])))
             if not slide_pressed:
                 if self.is_sliding:
                     self.stop_slide()
@@ -533,17 +509,16 @@ class Player:
                 self.update_movement(dt, keys)
 
             self.current_speed = math.sqrt(self.velocity_x ** 2 + self.velocity_y ** 2)
-            if not self.dash_attack_active:
-                self.update_fist_attack(dt)
+            self.update_fist_attack(dt)
         self.x += self.velocity_x * dt
         self.y += self.velocity_y * dt
 
     def update_movement(self, dt, keys):
         mx, my = 0, 0
-        if keys[pygame.K_w] or keys[pygame.K_UP]: my -= 1
-        if keys[pygame.K_s] or keys[pygame.K_DOWN]: my += 1
-        if keys[pygame.K_a] or keys[pygame.K_LEFT]: mx -= 1
-        if keys[pygame.K_d] or keys[pygame.K_RIGHT]: mx += 1
+        if (keys[self.bindings["bind_up"]] or (self.bindings["bind_up"] == pygame.K_w and pygame.K_UP not in self.bindings.values() and keys[pygame.K_UP])): my -= 1
+        if (keys[self.bindings["bind_down"]] or (self.bindings["bind_down"] == pygame.K_s and pygame.K_DOWN not in self.bindings.values() and keys[pygame.K_DOWN])): my += 1
+        if (keys[self.bindings["bind_left"]] or (self.bindings["bind_left"] == pygame.K_a and pygame.K_LEFT not in self.bindings.values() and keys[pygame.K_LEFT])): mx -= 1
+        if (keys[self.bindings["bind_right"]] or (self.bindings["bind_right"] == pygame.K_d and pygame.K_RIGHT not in self.bindings.values() and keys[pygame.K_RIGHT])): mx += 1
         if mx != 0 and my != 0:
             mx *= 0.7071
             my *= 0.7071
@@ -570,8 +545,6 @@ class Player:
         self.slide_timer = 0.0
         self.slide_current_speed = 0.0
         self.slide_needs_repress = True
-        self.dash_attack_window_timer = DASH_ATTACK_WINDOW
-        self.dash_attack_triggered = False
         if self.stats["slide_invincibility_after"] > 0:
             self.slide_invincible_after_timer = self.stats["slide_invincibility_after"]
         if self.stats["slide_shockwave"] > 0 and was_fast:
@@ -613,25 +586,6 @@ class Player:
                 self.is_slide_knockback_active() or
                 self.slide_invincible_after_timer > 0 or
                 self.counter_invincible_timer > 0)
-
-    # ── Dash ──
-    def try_dash_attack(self):
-        if self.dash_attack_window_timer > 0 and not self.dash_attack_triggered:
-            self.dash_attack_active = True
-            self.dash_attack_timer = self.dash_attack_duration
-            self.dash_attack_hit_enemies = []
-            self.dash_attack_triggered = True
-            self.dash_attack_window_timer = 0
-            return True
-        return False
-
-    def get_dash_attack_area(self):
-        if not self.dash_attack_active:
-            return None
-        return {"x": self.x, "y": self.y,
-                "range": self.get_dash_attack_range(),
-                "angle": self.facing_angle, "arc": math.pi,
-                "damage": self.get_dash_attack_damage()}
 
     # ── Кулаки ──
     def update_fist_attack(self, dt):
@@ -920,22 +874,6 @@ class Player:
         if self.is_slide_knockback_active():
             pygame.draw.circle(screen, (100, 200, 255), (sx, sy), self.size + 8, 2)
 
-        # Dash окно
-        if self.dash_attack_window_timer > 0 and not self.dash_attack_triggered:
-            pulse = math.sin(self.body_anim_timer * 15) * 0.5 + 0.5
-            pygame.draw.circle(screen, ORANGE, (sx, sy), self.size + 5 + int(pulse * 5), 2)
-
-        # Dash атака
-        if self.dash_attack_active:
-            dr = int(self.get_dash_attack_range())
-            p = 1.0 - self.dash_attack_timer / self.dash_attack_duration
-            pygame.draw.circle(screen, YELLOW, (sx, sy), dr, 3)
-            for i in range(8):
-                angle = self.facing_angle + (i / 8) * math.pi * 2
-                if (i / 8) <= p:
-                    pygame.draw.circle(screen, ORANGE,
-                        (sx + int(math.cos(angle) * dr), sy + int(math.sin(angle) * dr)), 5)
-
         # Контратака
         if self.counter_attack_active:
             cr = int(self.get_fist_range() * COUNTER_ATTACK_RANGE_MULTIPLIER)
@@ -1005,7 +943,7 @@ class Player:
                  ey + int(math.sin(self.facing_angle) * 2)), 2)
 
         # Удар визуал
-        if self.fist_attack_active and not self.dash_attack_active:
+        if self.fist_attack_active:
             attack = self.get_fist_attack_area()
             if attack:
                 fr = int(attack["range"])

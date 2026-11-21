@@ -117,22 +117,7 @@ class HeroAnimationTests(unittest.TestCase):
         for step in (-1, 1):
             self.assertFalse(content.colliderect(hero_arrow_rect(step)))
 
-    def test_dash_window_has_no_hud_hint_and_attack_still_works(self):
-        g = self.game
-        g.start_new_game()
-        p = g.player
-        with patch('pygame.time.get_ticks', return_value=1000):
-            g.screen.fill('black')
-            g.ui.draw_hud(g.screen, p, 0, 0)
-            before = pygame.image.tostring(g.screen, 'RGB')
-            p.dash_attack_window_timer = .2
-            p.dash_attack_triggered = False
-            g.screen.fill('black')
-            g.ui.draw_hud(g.screen, p, 0, 0)
-            self.assertEqual(before, pygame.image.tostring(g.screen, 'RGB'))
-        for language in TRANSLATIONS.values():
-            self.assertNotIn('DASH_HINT', language)
-            self.assertIn('CTRL_DASH_DESC', language)
-        self.assertTrue(p.try_dash_attack())
-        self.assertTrue(p.dash_attack_active)
-        self.assertIsNotNone(p.get_dash_attack_area())
+    def test_dash_attack_is_removed(self):
+        self.game.start_new_game()
+        self.assertFalse(hasattr(self.game.player, 'try_dash_attack'))
+        self.assertFalse(hasattr(self.game, 'check_dash_attack'))

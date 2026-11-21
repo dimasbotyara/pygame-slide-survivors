@@ -1267,9 +1267,6 @@ class Trainer:
             atk = p.get_fist_attack_area()
             if atk:
                 pygame.draw.circle(screen, YELLOW, (psx, psy), int(atk["range"]), 1)
-            dash = p.get_dash_attack_area()
-            if dash:
-                pygame.draw.circle(screen, ORANGE, (psx, psy), int(dash["range"]), 1)
             for pr in g.enemy_projectiles:
                 sx, sy = cam.apply(pr.x, pr.y)
                 pygame.draw.circle(screen, ORANGE, (int(sx), int(sy)), int(pr.size), 1)

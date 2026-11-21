@@ -7,7 +7,7 @@ from translations import set_language
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 SETTINGS_FILE = os.path.join(SCRIPT_DIR, "settings.json")
 
-from preferences import DEFAULTS, valid_value
+from preferences import DEFAULTS, valid_value, BINDINGS
 
 DEFAULT_SETTINGS = DEFAULTS
 
@@ -30,6 +30,10 @@ class SettingsManager:
         else:
             self.settings["first_launch"] = True
 
+        # Reject duplicate or malformed key maps rather than trapping a player.
+        keys = [self.settings[key] for key in BINDINGS]
+        if len(set(keys)) != len(keys):
+            self.settings.update(BINDINGS)
         set_language(self.settings.get("language", "ru"))
 
     def save(self):

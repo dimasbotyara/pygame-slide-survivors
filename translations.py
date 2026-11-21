@@ -2,6 +2,19 @@
 
 TRANSLATIONS = {
     "ru": {
+        'GUIDE_BEHAVIOR_boss_ember': 'Быстрый страж атакует чаще, но его здоровье ниже. Следите за короткой подготовкой удара.',
+        'GUIDE_BEHAVIOR_boss_glacier': 'Медленный колосс с большим запасом здоровья готовит широкий удар дольше остальных.',
+        'GUIDE_BEHAVIOR_boss_storm': 'Оракул держит дистанцию и выпускает веер из трёх снарядов. Во второй фазе стреляет чаще.',
+        'GUIDE_BEHAVIOR_boss_grove': 'Хранитель держит дистанцию и посылает парные снаряды. Во второй фазе стреляет чаще.',
+
+        'MOB_boss_ember': 'Пепельный страж', 'MOB_boss_glacier': 'Ледяной колосс',
+        'MOB_boss_storm': 'Громовой оракул', 'MOB_boss_grove': 'Хранитель рощи',
+
+        'TAB_CONTROLS': 'Клавиши', 'BIND_PRESS': 'Нажмите клавишу · Esc отмена',
+        'OPT_bind_up': 'Вверх', 'OPT_bind_down': 'Вниз', 'OPT_bind_left': 'Влево',
+        'OPT_bind_right': 'Вправо', 'OPT_bind_slide': 'Скольжение',
+        'OPT_bind_ultimate': 'Ультимейт', 'OPT_bind_pause': 'Пауза',
+
         'RESET_BUTTON': 'Закрыть игру, удалить сохранения и конфиги',
         'RESET_WARNING': 'Удалить рекорды, достижения и настройки и закрыть игру? Это нельзя отменить!',
         'RESET_CONFIRM': 'Удалить и выйти',
@@ -25,7 +38,7 @@ TRANSLATIONS = {
         'GUIDE_FILTER_BUTTON': 'Фильтр: {}',
         'GUIDE_TEMPORARY_NOTE': 'Временные бонусы с предметов: действуют только в этом забеге.',
         'GUIDE_PERMANENT_NOTE': 'Постоянные улучшения забега: выбираются при повышении уровня.',
-        'GUIDE_ABILITIES_NOTE': 'Способности героев: ультимейт каждого бойца (Q / ПКМ в забеге).',
+        'GUIDE_ABILITIES_NOTE': 'Способности героев: ультимейт каждого бойца (клавиша / ПКМ).',
         'GUIDE_HERO_UPGRADES_NOTE': 'Уникальные улучшения доступны только своему герою.',
         'GUIDE_TEMP_EFFECT': '{}: +{}',
         'GUIDE_TEMP_DURATION': 'Длительность: {} с',
@@ -200,7 +213,7 @@ TRANSLATIONS = {
         'OPT_crosshair': 'Прицел',
         'OPT_notification_duration': 'Время оповещений (сек.)',
         'UNLIMITED': 'Без ограничения',
-        'SETTINGS_TABS_HINT': '1–5 / Tab — вкладки    ↑↓ — строка    ←→ / Enter / клик — изменить    Esc — назад',
+        'SETTINGS_TABS_HINT': '1–6 / Tab — вкладки    ↑↓ — строка    ←→ / Enter / клик — изменить    Esc — назад',
         'SETTINGS_NOTE': 'Применяется сразу и сохраняется. Alt+Enter — весь экран.',
         'DISPLAY_FALLBACK': 'Режим недоступен: восстановлено окно 1280 × 720.',
         'HUD_KILLS': 'УБИТО',
@@ -272,8 +285,6 @@ TRANSLATIONS = {
         "upgrade_hit_grace_desc": "+0,15 с защиты после ранения",
         "upgrade_boost_duration_name": "Долгий разгон",
         "upgrade_boost_duration_desc": "Ускоритель действует на 2 с дольше",
-        "upgrade_dash_heal_name": "Второе дыхание",
-        "upgrade_dash_heal_desc": "+3 HP за результативный дэш-удар",
 
         # Select Language Screen
         "SELECT_LANG_TITLE": "ВЫБОР ЯЗЫКА",
@@ -362,7 +373,7 @@ TRANSLATIONS = {
         "SETTING_BACK": "Назад в меню",
         "SETTING_ON": "ВКЛ",
         "SETTING_OFF": "ВЫКЛ",
-        "SETTINGS_HINT": "1–5: вкладка    Стрелки: выбрать / изменить    Esc: назад",
+        "SETTINGS_HINT": "1–6: вкладка    Стрелки: выбрать / изменить    Esc: назад",
 
         # HUD & Gameplay
         "LEVEL_PREFIX": "Уровень {}",
@@ -543,8 +554,6 @@ TRANSLATIONS = {
         "CTRL_MOVE_DESC": "Движение",
         "CTRL_SLIDE_KEY": "Пробел / Shift",
         "CTRL_SLIDE_DESC": "Скольжение (удерживать)",
-        "CTRL_DASH_KEY": "ЛКМ (после скольжения)",
-        "CTRL_DASH_DESC": "Dash-атака (усиленный удар)",
         "CTRL_ULT_KEY": "Q / ПКМ",
         "CTRL_ULT_DESC": "Активация Ультимейта",
         "CTRL_LOOK_KEY": "Мышь",
@@ -558,9 +567,6 @@ TRANSLATIONS = {
         "CTRL_SLIDE_INFO_2": "Начало — огромная скорость + неуязвимость",
         "CTRL_SLIDE_INFO_3": "Скорость падает, отпустите вовремя!",
         "CTRL_SLIDE_INFO_4": "Враги получают урон при откидывании",
-        "CTRL_HEADER_DASH": "DASH-АТАКА:",
-        "CTRL_DASH_INFO_1": "Сразу после скольжения нажмите ЛКМ",
-        "CTRL_DASH_INFO_2": "Мощный удар по кругу (x3 урон!)",
         "CTRL_HEADER_COMBO": "КОМБО:",
         "CTRL_COMBO_INFO_1": "Убивайте врагов подряд для бонуса XP",
         "ESC_RETURN_HINT": "Нажмите Escape чтобы вернуться",
@@ -593,7 +599,6 @@ TRANSLATIONS = {
 
         # Floating Messages
         "MSG_UPGRADE_OBTAINED": "Получено: {}!",
-        "MSG_DASH": "DASH!",
         "MSG_LEVEL_UP": "Уровень {}!",
         "MSG_BOSS_DEFEATED": "БОСС ПОБЕЖДЁН!",
         "MSG_HEALTH_RESTORED": "Здоровье восстановлено!",
@@ -609,6 +614,19 @@ TRANSLATIONS = {
         "MSG_BOSS_SPAWNED": "⚠ БОСС ПОЯВИЛСЯ! ⚠",
     },
     "en": {
+        'GUIDE_BEHAVIOR_boss_ember': 'A fast sentinel with less health and a quick, frequent melee strike.',
+        'GUIDE_BEHAVIOR_boss_glacier': 'A slow, durable colossus with a wide, heavily telegraphed strike.',
+        'GUIDE_BEHAVIOR_boss_storm': 'The oracle keeps its distance and fires three bolts; it shoots faster in phase two.',
+        'GUIDE_BEHAVIOR_boss_grove': 'The guardian keeps its distance and fires paired bolts; it shoots faster in phase two.',
+
+        'MOB_boss_ember': 'Ember Sentinel', 'MOB_boss_glacier': 'Glacial Colossus',
+        'MOB_boss_storm': 'Storm Oracle', 'MOB_boss_grove': 'Grove Guardian',
+
+        'TAB_CONTROLS': 'Keys', 'BIND_PRESS': 'Press a key · Esc cancels',
+        'OPT_bind_up': 'Move up', 'OPT_bind_down': 'Move down', 'OPT_bind_left': 'Move left',
+        'OPT_bind_right': 'Move right', 'OPT_bind_slide': 'Slide',
+        'OPT_bind_ultimate': 'Ultimate', 'OPT_bind_pause': 'Pause',
+
         'RESET_BUTTON': 'Quit game and delete saves and settings',
         'RESET_WARNING': 'Delete high scores, achievements and settings and quit? This cannot be undone!',
         'RESET_CONFIRM': 'Delete and quit',
@@ -632,7 +650,7 @@ TRANSLATIONS = {
         'GUIDE_FILTER_BUTTON': 'Filter: {}',
         'GUIDE_TEMPORARY_NOTE': 'Temporary pickup bonuses: only for this run.',
         'GUIDE_PERMANENT_NOTE': 'Permanent run upgrades: chosen on level-up.',
-        'GUIDE_ABILITIES_NOTE': "Hero abilities: each fighter's ultimate (Q / RMB in a run).",
+        'GUIDE_ABILITIES_NOTE': "Hero abilities: each fighter's ultimate (bound key / RMB).",
         'GUIDE_HERO_UPGRADES_NOTE': 'Exclusive upgrades are available only to their hero.',
         'GUIDE_TEMP_EFFECT': '{}: +{}',
         'GUIDE_TEMP_DURATION': 'Duration: {}s',
@@ -807,7 +825,7 @@ TRANSLATIONS = {
         'OPT_crosshair': 'Crosshair',
         'OPT_notification_duration': 'Notification duration (sec.)',
         'UNLIMITED': 'Unlimited',
-        'SETTINGS_TABS_HINT': '1–5 / Tab: tabs    ↑↓: row    ←→ / Enter / click: change    Esc: back',
+        'SETTINGS_TABS_HINT': '1–6 / Tab: tabs    ↑↓: row    ←→ / Enter / click: change    Esc: back',
         'SETTINGS_NOTE': 'Applied and saved immediately. Alt+Enter: fullscreen.',
         'DISPLAY_FALLBACK': 'Mode unavailable: restored a 1280 × 720 window.',
         'HUD_KILLS': 'KILLS',
@@ -879,8 +897,6 @@ TRANSLATIONS = {
         "upgrade_hit_grace_desc": "+0.15s immunity after injury",
         "upgrade_boost_duration_name": "Long Burn",
         "upgrade_boost_duration_desc": "Speed pickups last 2s longer",
-        "upgrade_dash_heal_name": "Second Wind",
-        "upgrade_dash_heal_desc": "Heal 3 HP on the first dash hit",
 
         # Select Language Screen
         "SELECT_LANG_TITLE": "SELECT LANGUAGE",
@@ -969,7 +985,7 @@ TRANSLATIONS = {
         "SETTING_BACK": "Back to Menu",
         "SETTING_ON": "ON",
         "SETTING_OFF": "OFF",
-        "SETTINGS_HINT": "1–5: tabs    Arrows: select / change    Esc: back",
+        "SETTINGS_HINT": "1–6: tabs    Arrows: select / change    Esc: back",
 
         # HUD & Gameplay
         "LEVEL_PREFIX": "Level {}",
@@ -1149,8 +1165,6 @@ TRANSLATIONS = {
         "CTRL_MOVE_DESC": "Move",
         "CTRL_SLIDE_KEY": "Space / Shift",
         "CTRL_SLIDE_DESC": "Slide (hold)",
-        "CTRL_DASH_KEY": "LMB (after slide)",
-        "CTRL_DASH_DESC": "Dash Attack (empowered strike)",
         "CTRL_ULT_KEY": "Q / RMB",
         "CTRL_ULT_DESC": "Activate Ultimate Ability",
         "CTRL_LOOK_KEY": "Mouse",
@@ -1164,9 +1178,6 @@ TRANSLATIONS = {
         "CTRL_SLIDE_INFO_2": "Start gives massive speed + invincibility",
         "CTRL_SLIDE_INFO_3": "Speed drops over time, release on time!",
         "CTRL_SLIDE_INFO_4": "Enemies take damage when knocked back",
-        "CTRL_HEADER_DASH": "DASH ATTACK:",
-        "CTRL_DASH_INFO_1": "Click LMB right after sliding",
-        "CTRL_DASH_INFO_2": "Powerful circular strike (3x damage!)",
         "CTRL_HEADER_COMBO": "COMBO:",
         "CTRL_COMBO_INFO_1": "Kill enemies in sequence for XP bonus",
         "ESC_RETURN_HINT": "Press Escape to return",
@@ -1199,7 +1210,6 @@ TRANSLATIONS = {
 
         # Floating Messages
         "MSG_UPGRADE_OBTAINED": "Acquired: {}!",
-        "MSG_DASH": "DASH!",
         "MSG_LEVEL_UP": "Level {}!",
         "MSG_BOSS_DEFEATED": "BOSS DEFEATED!",
         "MSG_HEALTH_RESTORED": "Health restored!",

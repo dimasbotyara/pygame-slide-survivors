@@ -21,3 +21,9 @@ settings.json
 # Operating System Files
 .DS_Store
 Thumbs.db
+
+# Website build output
+website/node_modules/
+website/dist/
+website/.angular/
+website/out-tsc/

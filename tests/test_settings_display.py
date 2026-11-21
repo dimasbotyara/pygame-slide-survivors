@@ -111,7 +111,7 @@ class SettingsDisplayTests(unittest.TestCase):
                 g.draw_settings()
                 for i, (key, choices) in enumerate(rows):
                     self.assertNotEqual(t('OPT_'+key), 'OPT_'+key)
-                    if key in ('resolution', 'fullscreen'):
+                    if key in ('resolution', 'fullscreen') or key.startswith('bind_'):
                         continue
                     g.settings_selection = i
                     before = dict(g.settings_manager.settings)
