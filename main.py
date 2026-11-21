@@ -944,7 +944,7 @@ class Game:
             self.spark_storm_tick = 0.0
             self.rain_drops = [
                 [random.uniform(0, SCREEN_WIDTH), random.uniform(0, SCREEN_HEIGHT),
-                 random.uniform(420, 760), random.uniform(7, 16)]
+                 random.uniform(420, 760), random.uniform(12, 24)]
                 for _ in range(150)
             ]
 
@@ -953,7 +953,7 @@ class Game:
             self.shadow_ult_blades = [
                 {'angle': 0.0, 'direction': 1, 'delay': 0.0, 'turns': 0.0,
                  'hit_cooldowns': {}},
-                {'angle': 0.0, 'direction': -1, 'delay': .2, 'turns': 0.0,
+                {'angle': math.pi, 'direction': -1, 'delay': .2, 'turns': 0.0,
                  'hit_cooldowns': {}},
             ]
             self._ring(x, y, 110, (203, 166, 247), .55)
@@ -1099,8 +1099,9 @@ class Game:
         rain_color = (int(55+95*intensity), int(70+107*intensity),
                       int(88+117*intensity))
         for x, y, speed, length in self.rain_drops:
+            # Long, near-vertical streaks with a slight wind slant read clearly as rain.
             pygame.draw.line(self.screen, rain_color,
-                             (int(x), int(y)), (int(x-9), int(y+length*.045)), 1)
+                             (int(x), int(y)), (int(x-3), int(y+length)), 1)
 
     def _update_shadow_ult_blades(self, dt):
         if not self.shadow_ult_blades:
@@ -1119,11 +1120,20 @@ class Game:
                 blade['hit_cooldowns'][enemy_id] -= dt
                 if blade['hit_cooldowns'][enemy_id] <= 0:
                     del blade['hit_cooldowns'][enemy_id]
-            bx = self.player.x + math.cos(blade['angle'])*94
-            by = self.player.y + math.sin(blade['angle'])*94
+            axis_x, axis_y = math.cos(blade['angle']), math.sin(blade['angle'])
+            start = (self.player.x + axis_x*36, self.player.y + axis_y*36)
+            end = (self.player.x + axis_x*158, self.player.y + axis_y*158)
+            blade_x, blade_y = end[0]-start[0], end[1]-start[1]
+            blade_length_sq = blade_x*blade_x + blade_y*blade_y
             for enemy in self.enemies:
-                if (not enemy.alive or id(enemy) in blade['hit_cooldowns']
-                        or math.hypot(enemy.x-bx, enemy.y-by) > enemy.size+15):
+                if not enemy.alive or id(enemy) in blade['hit_cooldowns']:
+                    continue
+                along = max(0.0, min(1.0,
+                    ((enemy.x-start[0])*blade_x+(enemy.y-start[1])*blade_y)
+                    / blade_length_sq))
+                closest_x = start[0] + blade_x*along
+                closest_y = start[1] + blade_y*along
+                if math.hypot(enemy.x-closest_x, enemy.y-closest_y) > enemy.size+13:
                     continue
                 damage = self.player.get_fist_damage()*1.8
                 self.deal_damage_to_enemy(
@@ -1261,16 +1271,26 @@ class Game:
         for blade in self.shadow_ult_blades:
             if blade['delay'] > 0 or blade['turns'] >= 4.0:
                 continue
-            bx = self.player.x + math.cos(blade['angle']) * 94
-            by = self.player.y + math.sin(blade['angle']) * 94
-            center = self.camera.apply(bx, by)
-            tip = (center[0] + math.cos(blade['angle'] + math.pi/2) * 20,
-                   center[1] + math.sin(blade['angle'] + math.pi/2) * 20)
-            tail = (center[0] - math.cos(blade['angle'] + math.pi/2) * 20,
-                    center[1] - math.sin(blade['angle'] + math.pi/2) * 20)
-            pygame.draw.line(self.screen, (39, 20, 53), tail, tip, 11)
-            pygame.draw.line(self.screen, (203, 166, 247), tail, tip, 6)
-            pygame.draw.line(self.screen, (244, 231, 255), tail, tip, 2)
+            axis_x, axis_y = math.cos(blade['angle']), math.sin(blade['angle'])
+            side_x, side_y = -axis_y, axis_x
+            origin_x, origin_y = self.player.x, self.player.y
+
+            def blade_point(radius, width):
+                return self.camera.apply(origin_x + axis_x*radius + side_x*width,
+                                         origin_y + axis_y*radius + side_y*width)
+
+            silhouette = [blade_point(34, -10), blade_point(106, -14),
+                          blade_point(158, 0), blade_point(106, 14),
+                          blade_point(34, 10)]
+            inner = [blade_point(42, -5), blade_point(106, -8),
+                     blade_point(148, 0), blade_point(106, 8),
+                     blade_point(42, 5)]
+            pygame.draw.polygon(self.screen, (39, 20, 53), silhouette)
+            pygame.draw.polygon(self.screen, (157, 112, 220), inner)
+            pygame.draw.line(self.screen, (244, 231, 255),
+                             blade_point(42, 0), blade_point(148, 0), 2)
+            pygame.draw.line(self.screen, (221, 190, 255),
+                             blade_point(48, -5), blade_point(106, -8), 2)
         for body in self.ultimate_bodies:
             body.draw(self.screen, self.camera)
 
