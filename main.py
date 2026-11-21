@@ -56,6 +56,8 @@ class Game:
             self.state = "menu"
 
         self.selected_hero_index = 0
+        self.ult_uses_run = 0
+        self.bosses_killed_run = 0
         self.bestiary = None
         self.hero_cursor = 0
         self.surrendered = False
@@ -213,6 +215,8 @@ class Game:
     def start_new_game(self):
         """Начать новую игру — сбросить все объекты"""
         self.surrendered = False
+        self.ult_uses_run = 0
+        self.bosses_killed_run = 0
         hero_id = HERO_KEYS[self.selected_hero_index]
         self.player = Player(0, 0, hero_id=hero_id)
         self.camera = Camera(SCREEN_WIDTH, SCREEN_HEIGHT)
@@ -260,6 +264,7 @@ class Game:
                 return
 
     def draw_language_select(self):
+        self._sync_theme()
         self.ui.draw_language_select_screen(self.screen, self.lang_selection)
 
     # ================================================================
@@ -286,6 +291,7 @@ class Game:
                 return
 
     def draw_hero_select(self):
+        self._sync_theme()
         self.ui.draw_hero_select_screen(self.screen, self.hero_cursor)
 
     # ================================================================
@@ -296,8 +302,19 @@ class Game:
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     self.state = "menu"
+                    self.ui.achievement_dragging = False
+                    return
+                if event.key in (pygame.K_DOWN, pygame.K_PAGEDOWN):
+                    self.ui.achievement_scroll += 198 if event.key == pygame.K_PAGEDOWN else 66
+                elif event.key in (pygame.K_UP, pygame.K_PAGEUP):
+                    self.ui.achievement_scroll -= 198 if event.key == pygame.K_PAGEUP else 66
+            self.ui.handle_achievement_event(event)
+
+    def _sync_theme(self):
+        self.ui.apply_theme(self.selected_hero_index, self.settings_manager.get('theme', 'hero'))
 
     def draw_achievements(self):
+        self._sync_theme()
         self.ui.draw_achievements_screen(self.screen, self.achievement_manager)
 
     # ================================================================
@@ -350,9 +367,11 @@ class Game:
             self.state = 'menu'
 
     def draw_bestiary(self):
+        self._sync_theme()
         self.bestiary.draw(self.screen, self.ui)
 
     def draw_menu(self):
+        self._sync_theme()
         self.ui.draw_main_menu(self.screen, self.menu_selection, self.selected_hero_index)
 
     # ================================================================
@@ -397,6 +416,7 @@ class Game:
                     self.apply_runtime_settings()
 
     def draw_settings(self):
+        self._sync_theme()
         self.ui.draw_settings_screen(self.screen, self.settings_selection, self.settings_manager, self.settings_tab)
         if self.display.error:
             text = self.ui.body.render(t('DISPLAY_FALLBACK'), True, (255, 170, 100))
@@ -412,6 +432,7 @@ class Game:
                     self.state = "menu"
 
     def draw_controls(self):
+        self._sync_theme()
         self.ui.draw_controls_screen(self.screen)
 
     # ================================================================
@@ -424,6 +445,7 @@ class Game:
                     self.state = "menu"
 
     def draw_highscores(self):
+        self._sync_theme()
         self.ui.draw_highscores_screen(self.screen)
 
     # ================================================================
@@ -459,6 +481,7 @@ class Game:
                 return
 
     def draw_paused(self):
+        self._sync_theme()
         self.draw_playing()
         self.ui.draw_pause(self.screen, self.pause_selection)
 
@@ -485,6 +508,7 @@ class Game:
                 return
 
     def draw_game_over(self):
+        self._sync_theme()
         self.draw_playing()
         self.ui.draw_game_over(
             self.screen, self.player, self.game_time,
@@ -529,6 +553,7 @@ class Game:
             self.state = "playing"
 
     def draw_upgrading(self):
+        self._sync_theme()
         self.draw_playing()
         self.ui.draw_upgrade_screen(
             self.screen,
@@ -682,19 +707,35 @@ class Game:
             )
             self.particle_manager.add_message(t("MSG_LEVEL_UP", self.player.level), YELLOW)
 
-        # Проверить достижения
-        if self.player.enemies_killed >= 1:
-            self.achievement_manager.unlock("first_kill", self.particle_manager)
-        if self.player.enemies_killed >= 500:
-            self.achievement_manager.unlock("kills_500", self.particle_manager)
-        if self.player.total_slides_count >= 50:
-            self.achievement_manager.unlock("slide_master", self.particle_manager)
-        if self.player.combo_count >= 50:
-            self.achievement_manager.unlock("combo_50", self.particle_manager)
-        if self.player.level >= 20:
-            self.achievement_manager.unlock("level_20", self.particle_manager)
-        if self.game_time >= 300:
-            self.achievement_manager.unlock("survive_5min", self.particle_manager)
+        # Run milestones are checked centrally so all catalogue entries have
+        # real unlock conditions and thresholds can be extended safely.
+        metrics = {
+            'kills': self.player.enemies_killed,
+            'slides': self.player.total_slides_count,
+            'combo': getattr(self.player, 'combo_max_reached', self.player.combo_count),
+            'level': self.player.level,
+            'time': self.game_time,
+            'ult': self.ult_uses_run,
+            'bosses': self.bosses_killed_run,
+        }
+        milestones = {
+            'first_kill': ('kills', 1), 'kills_10': ('kills', 10),
+            'kills_50': ('kills', 50), 'kills_100': ('kills', 100),
+            'kills_500': ('kills', 500), 'kills_1000': ('kills', 1000),
+            'slide_10': ('slides', 10), 'slide_master': ('slides', 50),
+            'slide_250': ('slides', 250), 'slide_1000': ('slides', 1000),
+            'combo_25': ('combo', 25), 'combo_50': ('combo', 50),
+            'combo_100': ('combo', 100), 'level_5': ('level', 5),
+            'level_10': ('level', 10), 'level_20': ('level', 20),
+            'survive_1min': ('time', 60), 'survive_5min': ('time', 300),
+            'survive_10min': ('time', 600), 'ult_10': ('ult', 10),
+            'ult_25': ('ult', 25), 'boss_5': ('bosses', 5), 'boss_10': ('bosses', 10),
+        }
+        for achievement, (metric, threshold) in milestones.items():
+            if metrics[metric] >= threshold:
+                self.achievement_manager.unlock(achievement, self.particle_manager)
+        if self.game_time >= 60:
+            self.achievement_manager.unlock(f"{self.player.hero_id}_path", self.particle_manager)
 
         # Проверить смерть игрока
         if not self.player.is_alive():
@@ -711,6 +752,7 @@ class Game:
     def trigger_hero_ult(self):
         """Активация ультимативной способности текущего героя"""
         if self.player.trigger_hero_ult(self.player.hero_id, self.enemies, self.camera, self.particle_manager):
+            self.ult_uses_run += 1
             self.achievement_manager.unlock("ult_used", self.particle_manager)
 
     # ================================================================
@@ -1472,6 +1514,7 @@ class Game:
         # Частицы смерти
         death_particles = 15
         if getattr(enemy, 'is_boss', False):
+            self.bosses_killed_run += 1
             death_particles = 40
             self.camera.add_shake(SHAKE_BOSS_DEATH)
             self.particle_manager.add_message(t("MSG_BOSS_DEFEATED"), GOLD)
@@ -1774,6 +1817,7 @@ class Game:
 
     def draw_playing(self):
         """Нарисовать весь игровой мир"""
+        self._sync_theme()
         self.screen.fill(BLACK)
 
         # Мир (фон, тайлы, декорации, следы)

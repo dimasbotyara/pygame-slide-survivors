@@ -21,6 +21,7 @@ TABS = (
     )),
     ('INTERFACE', (
         ('language', ('ru', 'en')),
+        ('theme', ('hero', 'cyan', 'red', 'yellow', 'purple', 'green', 'orange')),
         ('minimap', (False, True)),
         ('radar_sweep', (False, True)),
         ('damage_numbers', (False, True)),
@@ -51,7 +52,7 @@ DEFAULTS = {
     'show_fps': False, 'smooth_scaling': True, 'pause_unfocused': True,
     'particle_density': 2, 'particle_budget': 2400, 'screen_shake': True,
     'screen_flashes': True, 'slide_trails': True, 'slide_particles': True,
-    'decorations': True, 'view_culling': True, 'language': 'ru',
+    'decorations': True, 'view_culling': True, 'language': 'ru', 'theme': 'hero',
     'minimap': True, 'radar_sweep': True,
     'damage_numbers': True, 'notifications': True,
     'hud_stats': True, 'camera_smoothing': 8, 'camera_lookahead': 60,

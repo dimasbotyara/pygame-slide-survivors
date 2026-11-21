@@ -18,6 +18,16 @@ EDGE = (54, 73, 91)
 MUTED = (159, 180, 194)
 MINT = (109, 249, 197)
 PAPER = (233, 242, 246)
+_BASE_PALETTE = {'INK': INK, 'PANEL': PANEL, 'EDGE': EDGE, 'MUTED': MUTED,
+                 'MINT': MINT, 'PAPER': PAPER}
+_THEME_COLORS = {
+    'cyan': (63, 211, 229), 'red': (244, 89, 107), 'yellow': (247, 207, 78),
+    'purple': (178, 113, 255), 'green': (91, 220, 158), 'orange': (255, 151, 75),
+}
+
+
+def _mix(a, b, amount):
+    return tuple(round(x * (1 - amount) + y * amount) for x, y in zip(a, b))
 
 
 def menu_rect(i):
@@ -114,10 +124,38 @@ class UI:
         self.mono = TextFont('mono', 16)
         self.body = TextFont('body', 19)
         self.fitted_text = lru_cache(maxsize=128)(self.fitted_text)
+        self.achievement_scroll = 0
+        self.achievement_dragging = False
+        self.apply_theme()
 
     def setting(self, key):
         settings = getattr(self, 'settings', None)
         return settings.get(key, DEFAULTS.get(key)) if settings else DEFAULTS.get(key)
+
+    def apply_theme(self, selected_hero_index=0, theme='hero'):
+        """Apply the live accent and tinted surfaces to every menu/UI screen."""
+        global INK, PANEL, EDGE, MUTED, MINT, PAPER, CYAN, GOLD
+        if theme == 'hero':
+            theme = HERO_KEYS[selected_hero_index % len(HERO_KEYS)]
+            accent = HEROES[theme]['color']
+        else:
+            accent = _THEME_COLORS.get(theme, _THEME_COLORS['cyan'])
+        # Tinted dark surfaces keep readable contrast while making the entire
+        # interface (including menu backdrop and modal screens) feel cohesive.
+        INK = _mix((12, 18, 29), accent, .12)
+        PANEL = _mix((23, 34, 50), accent, .16)
+        EDGE = _mix((54, 73, 91), accent, .48)
+        MUTED = _mix((159, 180, 194), accent, .38)
+        MINT = accent
+        PAPER = _mix((233, 242, 246), accent, .12)
+        CYAN = GOLD = accent
+        # Bestiary caches its imported palette, so refresh those bindings too.
+        import sys
+        guide = sys.modules.get('bestiary')
+        if guide is not None:
+            for name in ('INK', 'PANEL', 'EDGE', 'MUTED', 'MINT', 'PAPER'):
+                setattr(guide, name, globals()[name])
+        self.theme_accent = accent
 
     def fitted_text(self, text, color, width, height, max_size=14):
         # Measure rendered glyphs, not the nominal point size (Cyrillic/descenders).
@@ -611,7 +649,7 @@ class UI:
     # ВЫБОР ЯЗЫКА (ПЕРВЫЙ ЗАПУСК)
     # ================================================================
     def draw_language_select_screen(self, screen, selected_option):
-        screen.fill((15, 15, 30))
+        screen.fill(INK)
 
         title = self.font_large.render(t("SELECT_LANG_TITLE"), True, CYAN)
         title_rect = title.get_rect(center=(SCREEN_WIDTH // 2, 180))
@@ -650,6 +688,8 @@ class UI:
                 text = t('NATIVE_RESOLUTION') if value == (0, 0) else f'{value[0]} × {value[1]}'
             elif key == 'language':
                 text = t('LANG_RU' if value == 'ru' else 'LANG_EN')
+            elif key == 'theme':
+                text = t('THEME_' + str(value))
             elif key == 'fps_limit' and value == 0:
                 text = t('UNLIMITED')
             elif key == 'camera_smoothing' and value == 0:
@@ -674,38 +714,89 @@ class UI:
     # ================================================================
     # ДОСТИЖЕНИЯ
     # ================================================================
+    ACH_LIST_RECT = pygame.Rect(70, 108, 1080, 526)
+    ACH_TRACK_RECT = pygame.Rect(1164, 108, 16, 526)
+
+    def achievement_scroll_metrics(self):
+        viewport = self.ACH_LIST_RECT
+        content_h = len(ACHIEVEMENTS_LIST) * 66 - 8
+        maximum = max(0, content_h - viewport.h)
+        scroll = max(0, min(maximum, getattr(self, 'achievement_scroll', 0)))
+        self.achievement_scroll = scroll
+        thumb_h = max(42, round(self.ACH_TRACK_RECT.h * viewport.h / max(viewport.h, content_h)))
+        travel = self.ACH_TRACK_RECT.h - thumb_h
+        thumb_y = self.ACH_TRACK_RECT.y + (round(travel * scroll / maximum) if maximum else 0)
+        return maximum, pygame.Rect(self.ACH_TRACK_RECT.x, thumb_y, self.ACH_TRACK_RECT.w, thumb_h)
+
+    def handle_achievement_event(self, event):
+        maximum, thumb = self.achievement_scroll_metrics()
+        if event.type == pygame.MOUSEWHEEL:
+            self.achievement_scroll = max(0, min(maximum, self.achievement_scroll - event.y * 54))
+        elif event.type == pygame.MOUSEBUTTONDOWN:
+            if event.button in (4, 5):
+                self.achievement_scroll = max(0, min(maximum, self.achievement_scroll + (54 if event.button == 5 else -54)))
+            elif event.button == 1 and self.ACH_TRACK_RECT.collidepoint(event.pos):
+                if thumb.collidepoint(event.pos):
+                    self.achievement_dragging = True
+                    self.achievement_drag_offset = event.pos[1] - thumb.y
+                else:
+                    self.achievement_dragging = True
+                    self.achievement_drag_offset = thumb.h // 2
+                    self._drag_achievement_thumb(event.pos[1], maximum, thumb.h)
+        elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+            self.achievement_dragging = False
+        elif event.type == pygame.MOUSEMOTION and getattr(self, 'achievement_dragging', False):
+            self._drag_achievement_thumb(event.pos[1], maximum, thumb.h)
+
+    def _drag_achievement_thumb(self, mouse_y, maximum, thumb_h):
+        travel = self.ACH_TRACK_RECT.h - thumb_h
+        if maximum and travel:
+            y = max(self.ACH_TRACK_RECT.y, min(self.ACH_TRACK_RECT.bottom - thumb_h,
+                                               mouse_y - self.achievement_drag_offset))
+            self.achievement_scroll = round((y - self.ACH_TRACK_RECT.y) * maximum / travel)
+
     def draw_achievements_screen(self, screen, achievement_manager):
-        screen.fill((15, 15, 30))
+        screen.fill(INK)
+        title = self.font_large.render(t("ACH_TITLE"), True, MINT)
+        screen.blit(title, title.get_rect(center=(SCREEN_WIDTH // 2, 48)))
+        unlocked_count = sum(achievement_manager.is_unlocked(a) for a in ACHIEVEMENTS_LIST)
+        status = self.body.render(f'{unlocked_count} / {len(ACHIEVEMENTS_LIST)}', True, MUTED)
+        screen.blit(status, status.get_rect(topright=(1144, 34)))
 
-        title = self.font_large.render(t("ACH_TITLE"), True, GOLD)
-        title_rect = title.get_rect(center=(SCREEN_WIDTH // 2, 50))
-        screen.blit(title, title_rect)
-
-        start_y = 110
+        maximum, thumb = self.achievement_scroll_metrics()
+        viewport = self.ACH_LIST_RECT
+        old_clip = screen.get_clip()
+        screen.set_clip(viewport)
         for i, ach_id in enumerate(ACHIEVEMENTS_LIST):
-            y = start_y + i * 65
+            y = viewport.y + i * 66 - self.achievement_scroll
+            rect = pygame.Rect(viewport.x, y, viewport.w - 12, 58)
             unlocked = achievement_manager.is_unlocked(ach_id)
+            bg = _mix(PANEL, self.theme_accent, .15) if unlocked else PANEL
+            pygame.draw.rect(screen, bg, rect, border_radius=7)
+            pygame.draw.rect(screen, MINT if unlocked else EDGE, rect, 2 if unlocked else 1, border_radius=7)
+            pygame.draw.circle(screen, MINT if unlocked else EDGE, (rect.x + 25, rect.centery), 13, 2)
+            # Font-independent trophy/lock mark avoids missing emoji glyphs.
+            if unlocked:
+                pygame.draw.rect(screen, MINT, (rect.x + 20, rect.y + 18, 10, 11), border_radius=2)
+                pygame.draw.line(screen, MINT, (rect.x + 18, rect.y + 31), (rect.x + 32, rect.y + 31), 2)
+                pygame.draw.line(screen, MINT, (rect.x + 25, rect.y + 29), (rect.x + 25, rect.y + 36), 2)
+            else:
+                pygame.draw.arc(screen, MUTED, (rect.x + 20, rect.y + 13, 10, 12), 0, math.pi, 2)
+                pygame.draw.rect(screen, MUTED, (rect.x + 19, rect.y + 20, 12, 12), border_radius=2)
+            title_s = self.body.render(t(f"ach_{ach_id}_title"), True, MINT if unlocked else PAPER)
+            desc_s = self.font_small.render(t(f"ach_{ach_id}_desc"), True, MUTED)
+            screen.blit(title_s, (rect.x + 50, rect.y + 7))
+            screen.blit(desc_s, (rect.x + 50, rect.y + 32))
+        screen.set_clip(old_clip)
 
-            rect = pygame.Rect(180, y, SCREEN_WIDTH - 360, 55)
-            bg_c = (40, 50, 40) if unlocked else (30, 30, 40)
-            pygame.draw.rect(screen, bg_c, rect)
-            pygame.draw.rect(screen, GOLD if unlocked else GRAY, rect, 1)
-
-            icon_str = "🏆" if unlocked else "🔒"
-            icon_s = self.font.render(icon_str, True, GOLD if unlocked else GRAY)
-            screen.blit(icon_s, (rect.x + 15, rect.y + 12))
-
-            title_str = t(f"ach_{ach_id}_title")
-            t_s = self.font.render(title_str, True, GOLD if unlocked else WHITE)
-            screen.blit(t_s, (rect.x + 55, rect.y + 8))
-
-            desc_str = t(f"ach_{ach_id}_desc")
-            d_s = self.font_small.render(desc_str, True, LIGHT_GRAY if unlocked else GRAY)
-            screen.blit(d_s, (rect.x + 55, rect.y + 32))
-
-        back = self.font.render(t("ESC_RETURN_HINT"), True, GRAY)
-        back_rect = back.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 30))
-        screen.blit(back, back_rect)
+        track = self.ACH_TRACK_RECT
+        pygame.draw.rect(screen, PANEL, track, border_radius=8)
+        pygame.draw.rect(screen, EDGE, track, 1, border_radius=8)
+        pygame.draw.rect(screen, MINT, thumb, border_radius=8)
+        hint = self.font_small.render(t('ACH_SCROLL_HINT'), True, MUTED)
+        screen.blit(hint, hint.get_rect(midleft=(70, 661)))
+        back = self.font_small.render(t("ESC_RETURN_HINT"), True, MUTED)
+        screen.blit(back, back.get_rect(midright=(1210, 693)))
 
     # ================================================================
     # ГЛАВНОЕ МЕНЮ
@@ -720,10 +811,10 @@ class UI:
         drift = int(seconds * 18) % 68
         for lane in range(-7, SCREEN_WIDTH // 68 + 1):
             x = lane * 68 + drift
-            pygame.draw.line(screen, (19, 29, 43), (x, SCREEN_HEIGHT), (x+350, 0), 1)
+            pygame.draw.line(screen, _mix(INK, self.theme_accent, .10), (x, SCREEN_HEIGHT), (x+350, 0), 1)
             progress = (seconds * 0.24 + lane * 0.618) % 1
             head = (int(x + progress * 350), int((1-progress) * SCREEN_HEIGHT))
-            pygame.draw.line(screen, (32, 67, 76), head, (head[0]-13, head[1]+27), 2)
+            pygame.draw.line(screen, _mix(EDGE, self.theme_accent, .42), head, (head[0]-13, head[1]+27), 2)
         screen.blit(self.mono.render('SS  /  ' + t('LOBBY'), True, MINT), (70, 40))
         guide_button = bestiary_rect()
         pygame.draw.rect(screen, PANEL, guide_button, border_radius=7)
@@ -745,15 +836,10 @@ class UI:
         screen.blit(self.mono.render(t('ACTIVE_FIGHTER'), True, MUTED), (x, 225))
         serial = self.mono.render(f'{selected_hero_index+1:02} / {len(HERO_KEYS):02}', True, accent)
         screen.blit(serial, serial.get_rect(topright=(card.right-28, 225)))
-        for step in (-1, 1):
-            button = hero_arrow_rect(step)
-            hot = button.collidepoint(getattr(self, "mouse_pos", pygame.mouse.get_pos)())
-            pygame.draw.rect(screen, INK, button, border_radius=8)
-            pygame.draw.rect(screen, accent if hot else EDGE, button, 2, border_radius=8)
-            ax, ay = button.center
-            pygame.draw.lines(screen, accent if hot else PAPER, False,
-                              [(ax-step*4, ay-9), (ax+step*5, ay), (ax-step*4, ay+9)], 3)
-        content_rect = pygame.Rect(card.x+88, 260, card.w-176, 220)
+        # Animated hero content must stay clear of the arrow buttons
+        # (703-755 and 1116-1168): the old rect overlapped them by 6px, so
+        # sliding snapshots carried arrow slivers along with the hero.
+        content_rect = pygame.Rect(card.x+104, 260, card.w-208, 220)
         hero_before = screen.subsurface(content_rect).copy()
         now = pygame.time.get_ticks()
         if getattr(self, '_lobby_hero', selected_hero_index) != selected_hero_index:
@@ -782,7 +868,6 @@ class UI:
         pygame.draw.line(screen, EDGE, (x, 484), (card.right-28, 484))
         screen.blit(self.mono.render(t('ULT_LABEL'), True, MUTED), (x, 509))
         screen.blit(self.font.render('⚡ ' + t(hero['ult_id']+'_name'), True, accent), (x, 538))
-        content_rect = pygame.Rect(card.x+88, 260, card.w-176, 220)
         current = screen.subsurface(content_rect).copy()
         progress = min(1, (now-getattr(self, '_hero_started', -1000))/260)
         if progress < 1 and self.setting("hero_animations"):
@@ -800,6 +885,15 @@ class UI:
             screen.set_clip(clip)
         current.set_alpha(255)
         self._hero_card = current
+        # Arrows are drawn last so the hero transition can never move them.
+        for step in (-1, 1):
+            button = hero_arrow_rect(step)
+            hot = button.collidepoint(getattr(self, "mouse_pos", pygame.mouse.get_pos)())
+            pygame.draw.rect(screen, INK, button, border_radius=8)
+            pygame.draw.rect(screen, accent if hot else EDGE, button, 2, border_radius=8)
+            ax, ay = button.center
+            pygame.draw.lines(screen, accent if hot else PAPER, False,
+                              [(ax-step*4, ay-9), (ax+step*5, ay), (ax-step*4, ay+9)], 3)
         pygame.draw.line(screen, EDGE, (70, 646), (1210, 646))
         screen.blit(self.body.render(t('MENU_HINT'), True, MUTED), (70, 661))
 
@@ -807,7 +901,7 @@ class UI:
     # РЕКОРДЫ
     # ================================================================
     def draw_highscores_screen(self, screen):
-        screen.fill((15, 15, 30))
+        screen.fill(INK)
 
         title = self.font_large.render(t("HIGHSCORES_TITLE"), True, GOLD)
         title_rect = title.get_rect(center=(SCREEN_WIDTH // 2, 50))
@@ -863,7 +957,7 @@ class UI:
     # УПРАВЛЕНИЕ
     # ================================================================
     def draw_controls_screen(self, screen):
-        screen.fill((15, 15, 30))
+        screen.fill(INK)
 
         title = self.font_large.render(t("CONTROLS_TITLE"), True, CYAN)
         title_rect = title.get_rect(center=(SCREEN_WIDTH // 2, 40))

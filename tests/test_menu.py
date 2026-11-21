@@ -10,6 +10,7 @@ os.environ.setdefault('SDL_AUDIODRIVER', 'dummy')
 
 import pygame
 from highscores import load_highscores
+from achievements import ACHIEVEMENTS_LIST
 from main import Game
 from translations import set_language, t
 from typography import face
@@ -90,6 +91,32 @@ class MenuTests(unittest.TestCase):
             self.assertEqual((scores[0]['time'], scores[0]['level'], scores[0]['kills']), (52, 1, 8))
         g.start_new_game()
         self.assertFalse(g.surrendered)
+
+    def test_achievement_list_mouse_wheel_and_draggable_scrollbar(self):
+        g = self.game
+        g.state = 'achievements'
+        g.draw_achievements()
+        self.assertGreaterEqual(len(ACHIEVEMENTS_LIST), 25)
+        for lang in ('ru', 'en'):
+            set_language(lang)
+            for ach_id in ACHIEVEMENTS_LIST:
+                self.assertNotEqual(t(f'ach_{ach_id}_title'), f'ach_{ach_id}_title')
+                self.assertNotEqual(t(f'ach_{ach_id}_desc'), f'ach_{ach_id}_desc')
+        set_language('ru')
+        self.assertEqual(g.ui.achievement_scroll, 0)
+        g.update_achievements([pygame.event.Event(pygame.MOUSEWHEEL, y=-3)])
+        self.assertGreater(g.ui.achievement_scroll, 0)
+        maximum, thumb = g.ui.achievement_scroll_metrics()
+        self.assertGreater(maximum, 0)
+        g.update_achievements([pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1,
+                                                  pos=thumb.center)])
+        g.update_achievements([pygame.event.Event(pygame.MOUSEMOTION,
+                                                  pos=(thumb.centerx, g.ui.ACH_TRACK_RECT.bottom),
+                                                  rel=(0, 100), buttons=(1, 0, 0))])
+        g.update_achievements([pygame.event.Event(pygame.MOUSEBUTTONUP, button=1,
+                                                  pos=(thumb.centerx, g.ui.ACH_TRACK_RECT.bottom))])
+        self.assertEqual(g.ui.achievement_scroll, maximum)
+        g.draw_achievements()
 
     def test_offline_fallback_and_language_flags(self):
         font = self.game.ui.font
