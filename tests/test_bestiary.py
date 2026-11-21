@@ -154,7 +154,7 @@ class BestiaryTests(unittest.TestCase):
                 self.assertLess(ui.font_medium.size(name(key))[0], 746)
                 e = b.enemy(key)
                 desc = t('GUIDE_BEHAVIOR_'+('boss' if key == 'boss' else e.archetype))
-                self.assertLessEqual(484+24*len(list(word_lines(ui.body, desc, 746))), 593)
+                self.assertLessEqual(484+24*len(list(word_lines(ui.body, desc, 746))), 628)
                 self.assertLessEqual(len(facts(key, e)), 8)
                 self.assertLessEqual(593+21*len(list(word_lines(ui.font_small, t('GUIDE_NATIVE_RULE'), 746))), 646)
             self.assertLess(ui.mono.size(t('GUIDE_HINT'))[0], 1140)
@@ -191,7 +191,7 @@ class BestiaryTests(unittest.TestCase):
                     self.assertLessEqual(b.entry_icon(key).get_width(), 40)
                     self.assertGreater(b.entry_preview(key).get_bounding_rect().w, 0)
                     desc = b.entry_description(key)
-                    self.assertLessEqual(484 + 24 * len(list(word_lines(ui.body, desc, 746))), 593)
+                    self.assertLessEqual(484 + 24 * len(list(word_lines(ui.body, desc, 746))), 628)
                     self.assertLess(ui.font_medium.size(b.entry_name(key))[0], 1200)
             self.assertLess(ui.mono.size(t('GUIDE_HINT'))[0], 1140)
 

@@ -20,6 +20,7 @@ HEROES = {
         "bonus_upgrades": [],
         "hero_upgrades": ["slider_hyper_slide", "slider_infinite_momentum"],
         "ult_id": "ult_chrono_slide",
+        "ult_cast_time": 0.6,
     },
     "brawler": {
         "id": "brawler",
@@ -37,6 +38,7 @@ HEROES = {
         "bonus_upgrades": [],
         "hero_upgrades": ["brawler_titan_fists", "brawler_blood_rage"],
         "ult_id": "ult_earthquake_slam",
+        "ult_cast_time": 1.5,
     },
     "spark": {
         "id": "spark",
@@ -54,6 +56,7 @@ HEROES = {
         "bonus_upgrades": ["slide_electric"],
         "hero_upgrades": ["spark_overcharge", "spark_thunder_strike"],
         "ult_id": "ult_chain_lightning",
+        "ult_cast_time": 0.9,
     },
     "shadow": {
         "id": "shadow",
@@ -71,6 +74,7 @@ HEROES = {
         "bonus_upgrades": [],
         "hero_upgrades": ["shadow_blade_mastery", "shadow_soul_drain"],
         "ult_id": "ult_shadow_dance",
+        "ult_cast_time": 1.2,
     },
 }
 

@@ -111,7 +111,7 @@ class GameMessage:
     def update(self, dt):
         self.lifetime -= dt
 
-    def draw(self, screen, font, y_offset=0):
+    def draw(self, screen, font, y_offset=0, palette=None):
         if self.lifetime <= 0:
             return
 
@@ -128,14 +128,15 @@ class GameMessage:
                 line = candidate
         lines.append(line)
         height = 24+len(lines)*23
+        accent, panel, edge, text_color = palette or (self.color, (15, 24, 37), (54, 73, 91), (233, 242, 246))
         card = pygame.Surface((550, height), pygame.SRCALPHA)
-        pygame.draw.rect(card, (15, 24, 37, 240), card.get_rect(), border_radius=9)
-        pygame.draw.rect(card, (54, 73, 91), card.get_rect(), 1, border_radius=9)
-        pygame.draw.rect(card, self.color, (0, 9, 4, height-18), border_radius=2)
+        pygame.draw.rect(card, (*panel, 240), card.get_rect(), border_radius=9)
+        pygame.draw.rect(card, edge, card.get_rect(), 1, border_radius=9)
+        pygame.draw.rect(card, accent, (0, 9, 4, height-18), border_radius=2)
         for i, text in enumerate(lines):
-            card.blit(font.render(text, True, (233, 242, 246)), (20, 10+i*23))
-        pygame.draw.rect(card, (38, 50, 65), (20, height-7, 510, 2))
-        pygame.draw.rect(card, self.color, (20, height-7, round(510*progress), 2))
+            card.blit(font.render(text, True, text_color), (20, 10+i*23))
+        pygame.draw.rect(card, edge, (20, height-7, 510, 2))
+        pygame.draw.rect(card, accent, (20, height-7, round(510*progress), 2))
         card.set_alpha(alpha)
         screen.blit(card, (SCREEN_WIDTH//2-275, NOTIFICATION_TOP_Y+y_offset-round(9*max(0, 1-age/.18))))
         return height+8
@@ -155,6 +156,7 @@ class ParticleManager:
         self.notifications_enabled = True
         self.message_duration = 2.5
         self.message_font = TextFont('body', 18)
+        self.theme_palette = None
 
     def _count(self, count):
         desired = count*self.density
@@ -195,7 +197,8 @@ class ParticleManager:
         # Сообщения (поверх всего, экранные координаты)
         offset = 0
         for m in self.messages[-4:]:
-            offset += m.draw(screen, self.message_font, y_offset=offset) or 0
+            offset += m.draw(screen, self.message_font, y_offset=offset,
+                             palette=self.theme_palette) or 0
 
     # ================================================================
     # УДОБНЫЕ МЕТОДЫ ДЛЯ СОЗДАНИЯ ЭФФЕКТОВ

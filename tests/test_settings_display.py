@@ -17,7 +17,8 @@ from settings import SCREEN_WIDTH, SCREEN_HEIGHT
 from settings_manager import SettingsManager
 from translations import set_language, t
 from heroes import HEROES
-from ui import settings_rect, settings_tab_rect
+from ui import (settings_rect, settings_tab_rect, settings_value_left_rect,
+                settings_value_right_rect)
 
 
 def press(key, **kwargs):
@@ -192,15 +193,35 @@ class SettingsDisplayTests(unittest.TestCase):
         self.assertNotEqual(g.screen.get_at((SCREEN_WIDTH // 2, NOTIFICATION_TOP_Y + 5)),
                             pygame.Color('black'))
 
+    def test_mouse_clicks_on_setting_arrows_change_left_and_right(self):
+        g = self.game
+        g.settings_tab = 2  # Interface; theme row is index 1
+        g.settings_selection = 1
+        g.update_settings([pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1,
+                                              pos=settings_value_right_rect(1).center)])
+        self.assertEqual(g.settings_manager.get('theme'), 'cyan')
+        g.update_settings([pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1,
+                                              pos=settings_value_left_rect(1).center)])
+        self.assertEqual(g.settings_manager.get('theme'), 'hero')
+
     def test_theme_option_defaults_to_selected_hero_and_supports_custom_palette(self):
         import ui as ui_module
         g = self.game
         self.assertEqual(g.settings_manager.get('theme'), 'hero')
         g.selected_hero_index = 3  # Shadow
         g._sync_theme()
-        shadow_accent = HEROES['shadow']['color']
-        self.assertEqual(ui_module.MINT, shadow_accent)
+        shadow_accent = (203, 166, 247)
+        self.assertEqual(ui_module.MINT, shadow_accent)  # Catppuccin Mocha mauve
+        self.assertEqual(ui_module.INK, (30, 30, 46))
+        g.selected_hero_index = 2  # Spark uses Gruvbox Dark
+        g._sync_theme()
+        self.assertEqual(ui_module.INK, (40, 40, 40))
+        self.assertEqual(ui_module.MINT, (250, 189, 47))
+        g.selected_hero_index = 0  # Slider is a softer teal
+        g._sync_theme()
+        self.assertEqual(ui_module.MINT, (90, 185, 181))
         default_bg = ui_module.INK
+        g.selected_hero_index = 3
         g.settings_manager.set('theme', 'green')
         g._sync_theme()
         self.assertNotEqual(ui_module.MINT, shadow_accent)
