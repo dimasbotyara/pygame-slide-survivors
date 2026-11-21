@@ -1,5 +1,6 @@
 """Ultimate charge gates, cinematic casts, and Echo Slam body impacts."""
 import os
+import math
 from collections import defaultdict
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -82,6 +83,10 @@ class UltimateTests(TestCase):
         self.assertFalse(source.alive)
         self.assertTrue(target.alive)
         self.assertGreater(len(g.earthquake_cracks), 20)
+        self.assertEqual(g.earthquake_crack_timer, 15.0)
+        farthest = max(math.dist(point, (g.player.x, g.player.y))
+                       for segment in g.earthquake_cracks for point in segment)
+        self.assertGreater(farthest, 455 * 1.2)
         self.assertTrue(g.ultimate_bodies)
         body = g.ultimate_bodies[0]
         body.x = target.x - body.radius - 1
@@ -90,6 +95,75 @@ class UltimateTests(TestCase):
         g._update_ultimate_effects(.02)
         self.assertLess(target.hp, hp_before)
         self.assertIn(id(target), body.hit_targets)
+
+    def test_slider_auto_ricochet_returns_to_origin_and_starts_slide_cooldown(self):
+        g = self.game
+        g.enemies = [Enemy(160, 0, 'ghoul')]
+        target = g.enemies[0]
+        target.max_hp = target.hp = 5000
+        origin = (g.player.x, g.player.y)
+        g._resolve_hero_ult('slider')
+        self.assertTrue(g.player.ultimate_action_lock)
+        for _ in range(100):
+            g._update_slider_ultimate(.05)
+            if g.slider_ultimate is None:
+                break
+        self.assertIsNone(g.slider_ultimate)
+        self.assertFalse(g.player.ultimate_action_lock)
+        self.assertEqual((g.player.x, g.player.y), origin)
+        self.assertLess(target.hp, 5000)
+        self.assertEqual(g.player.slide_charges, 0)
+        self.assertGreater(g.player.slide_cooldown_timer, 0)
+        self.assertEqual(g.player.speed_boost_timer, 5.0)
+
+    def test_slider_empty_cast_refunds_half_meter_but_keeps_cooldown(self):
+        g = self.game
+        g.player.ult_charge = 0
+        g.player.ult_cooldown_timer = 10.0
+        g._resolve_hero_ult('slider')
+        g._update_slider_ultimate(.01)
+        self.assertEqual(g.player.ult_charge, 50.0)
+        self.assertEqual(g.player.ult_cooldown_timer, 10.0)
+        self.assertIsNone(g.slider_ultimate)
+        self.assertEqual(g.player.speed_boost_timer, 5.0)
+        self.assertEqual(g.player.slide_charges, 0)
+
+    def test_spark_storm_weather_and_shadow_blade_turns(self):
+        g = self.game
+        g._resolve_hero_ult('spark')
+        self.assertEqual(g.spark_storm_timer, 10.0)
+        self.assertEqual(len(g.rain_drops), 150)
+        g._update_spark_storm(.5)
+        self.assertLess(g.spark_storm_timer, 10.0)
+        lightning_target = Enemy(120, 0, 'ghoul')
+        lightning_target.max_hp = lightning_target.hp = 5000
+        g.enemies = [lightning_target]
+        hp_before_storm = lightning_target.hp
+        g._update_spark_storm(.01)
+        self.assertLess(lightning_target.hp, hp_before_storm)
+
+        g.selected_hero_index = 3
+        g.start_new_game()
+        g.player.hp = 50
+        shadow_target = Enemy(93, 15, 'ghoul')
+        shadow_target.max_hp = shadow_target.hp = 5000
+        g.enemies = [shadow_target]
+        hp_before_shadow = shadow_target.hp
+        g._resolve_hero_ult('shadow')
+        first, second = g.shadow_ult_blades
+        self.assertEqual(first['direction'], 1)
+        self.assertEqual(second['direction'], -1)
+        self.assertEqual(second['delay'], .2)
+        hp_before_blades = g.player.hp
+        g._update_shadow_ult_blades(.01)
+        self.assertGreater(first['turns'], 0)
+        self.assertAlmostEqual(second['delay'], .19)
+        self.assertLess(shadow_target.hp, hp_before_shadow)
+        self.assertGreater(g.player.hp, hp_before_blades)
+        g._update_shadow_ult_blades(.09)
+        self.assertAlmostEqual(second['delay'], .1)
+        g._update_shadow_ult_blades(1.7)
+        self.assertFalse(g.shadow_ult_blades)
 
     def test_selected_hero_cast_times_are_in_the_requested_range(self):
         self.assertEqual([HEROES[h]['ult_cast_time'] for h in ('slider', 'brawler', 'spark', 'shadow')],

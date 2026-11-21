@@ -69,7 +69,16 @@ class Game:
         self.ultimate_rings = []
         self.earthquake_cracks = []
         self.earthquake_crack_timer = 0.0
+        self.earthquake_crack_duration = 15.0
         self.storm_zones = []
+        self.spark_storm_timer = 0.0
+        self.spark_storm_duration = 10.0
+        self.spark_storm_tick = 0.0
+        self.rain_drops = []
+        self.slider_ultimate = None
+        self.shadow_ult_blades = []
+        self.crack_overlay_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+        self.storm_overlay_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
         self.lightning_bolts = []
         self.shadow_slashes = []
         self.bestiary = None
@@ -240,7 +249,13 @@ class Game:
         self.ultimate_rings.clear()
         self.earthquake_cracks.clear()
         self.earthquake_crack_timer = 0.0
+        self.earthquake_crack_duration = 15.0
         self.storm_zones.clear()
+        self.spark_storm_timer = 0.0
+        self.spark_storm_tick = 0.0
+        self.rain_drops.clear()
+        self.slider_ultimate = None
+        self.shadow_ult_blades.clear()
         self.lightning_bolts.clear()
         self.shadow_slashes.clear()
         hero_id = HERO_KEYS[self.selected_hero_index]
@@ -644,6 +659,7 @@ class Game:
         move_start = self.player.x, self.player.y
         self.player.update(dt, keys, mouse_pos, self.camera)
         self._update_ultimate_cast(dt)
+        self._update_slider_ultimate(dt)
 
         # Ограничить игрока ареной босса
         self.enforce_boss_arena()
@@ -746,7 +762,8 @@ class Game:
         self.particle_manager.update(dt)
 
         # Defer level-up selection until the committed ultimate animation ends.
-        if self.player.pending_levels > 0 and not self.ultimate_cast_pending:
+        if (self.player.pending_levels > 0 and not self.ultimate_cast_pending
+                and self.slider_ultimate is None):
             self.player.pending_levels -= 1
             luck = self.player.stats["luck"]
             hero_id = getattr(self.player, 'hero_id', 'slider')
@@ -833,32 +850,34 @@ class Game:
         player.resolve_hero_ult(hero_id, self.camera, self.particle_manager)
 
         if hero_id == 'slider':
-            # Chrono burst: a damaging time ripple, then a long invulnerable rush.
-            radius = 390
-            self._ring(x, y, radius, (96, 231, 226), .7)
-            for enemy in list(self.enemies):
-                if not enemy.alive:
-                    continue
-                dx, dy = enemy.x-x, enemy.y-y
-                dist = math.hypot(dx, dy)
-                if dist <= radius + enemy.size:
-                    nx, ny = (dx/dist, dy/dist) if dist else (1, 0)
-                    self.deal_damage_to_enemy(
-                        enemy, 180 + player.get_fist_damage()*1.6,
-                        knockback_force=520, knockback_dir_x=nx, knockback_dir_y=ny,
-                        can_crit=False, can_stun=False, can_lifesteal=False,
-                        particle_color=(96, 231, 226), particle_count=12, source='ult'
-                    )
-                    if enemy.alive:
-                        enemy.stun_timer = max(getattr(enemy, 'stun_timer', 0), .85)
+            # Automatically ricochet through nearby foes, then return to the
+            # exact cast position. Controls stay locked until the return ends.
+            radius = 760
+            targets = [e for e in self.enemies if e.alive
+                       and math.hypot(e.x-x, e.y-y) <= radius + e.size]
+            self.slider_ultimate = {
+                'origin': (x, y), 'timer': 2.0, 'target': None,
+                'visited': set(), 'last_target': None, 'returning': False,
+            }
+            player.ultimate_action_lock = True
+            player.is_sliding = False
+            player.slide_current_speed = 0.0
+            player.velocity_x = player.velocity_y = 0.0
+            self._ring(x, y, radius, (96, 231, 226), 1.0)
+            if not targets:
+                # Keep the cooldown, but refund half of the spent meter.
+                player.ult_charge = 50.0
 
         elif hero_id == 'brawler':
             # Earthquake: radial damage cracks the ground and killed foes become
             # physical ragdolls that can echo-slam into additional enemies.
             radius = 455
             damage = 285 + player.get_fist_damage()*2.5
-            self.earthquake_cracks = fracture_lines(x, y, int(self.game_time*1000)+int(x+y))
-            self.earthquake_crack_timer = 3.2
+            crack_radius = radius * 2.5
+            self.earthquake_cracks = fracture_lines(
+                x, y, int(self.game_time*1000)+int(x+y), radius=crack_radius
+            )
+            self.earthquake_crack_timer = self.earthquake_crack_duration
             self._ring(x, y, radius, (239, 185, 89), .85)
             for enemy in list(self.enemies):
                 if not enemy.alive:
@@ -921,38 +940,205 @@ class Game:
                 self.storm_zones.append({'x': point[0], 'y': point[1], 'radius': 84,
                                          'timer': 3.4, 'tick': .2, 'phase': 0.0})
             self._ring(x, y, 310, (250, 189, 47), .65)
+            self.spark_storm_timer = self.spark_storm_duration
+            self.spark_storm_tick = 0.0
+            self.rain_drops = [
+                [random.uniform(0, SCREEN_WIDTH), random.uniform(0, SCREEN_HEIGHT),
+                 random.uniform(420, 760), random.uniform(7, 16)]
+                for _ in range(150)
+            ]
 
         elif hero_id == 'shadow':
-            # Shadow Dance: teleporting cuts across the nearest ten foes, healing
-            # the hero and leaving brief violet slash trails between each target.
-            targets = sorted((e for e in self.enemies if e.alive
-                              and math.hypot(e.x-x, e.y-y) <= 680),
-                             key=lambda e: math.hypot(e.x-x, e.y-y))[:10]
-            previous = (x, y)
-            for index, enemy in enumerate(targets):
-                ex, ey = enemy.x, enemy.y
-                dx, dy = ex-player.x, ey-player.y
-                dist = math.hypot(dx, dy) or 1.0
-                landing = (ex-dx/dist*32, ey-dy/dist*32)
-                self.shadow_slashes.append({'segments': lightning_segments(previous, (ex, ey), index+int(self.game_time*1000), 5),
-                                            'timer': .38, 'duration': .38})
-                player.x, player.y = landing
-                player.facing_angle = math.atan2(ey-landing[1], ex-landing[0])
+            # Twin blades orbit in opposite directions; the second joins 0.2s later.
+            self.shadow_ult_blades = [
+                {'angle': 0.0, 'direction': 1, 'delay': 0.0, 'turns': 0.0,
+                 'hit_cooldowns': {}},
+                {'angle': 0.0, 'direction': -1, 'delay': .2, 'turns': 0.0,
+                 'hit_cooldowns': {}},
+            ]
+            self._ring(x, y, 110, (203, 166, 247), .55)
+
+    def _update_slider_ultimate(self, dt):
+        state = self.slider_ultimate
+        if state is None:
+            return
+        player = self.player
+        if not state['returning']:
+            state['timer'] -= dt
+            if state['timer'] <= 0:
+                state['returning'] = True
+
+            nearby = [e for e in self.enemies if e.alive
+                      and math.hypot(e.x-player.x, e.y-player.y) <= 820 + e.size]
+            target = state['target']
+            if target is None or not target.alive:
+                candidates = [e for e in nearby if id(e) not in state['visited']]
+                if not candidates:
+                    if nearby:
+                        state['visited'].clear()
+                        candidates = nearby[:]
+                    else:
+                        state['returning'] = True
+                if candidates and not state['returning']:
+                    if len(candidates) > 1:
+                        alternatives = [e for e in candidates if id(e) != state['last_target']]
+                        if alternatives:
+                            candidates = alternatives
+                    target = random.choice(candidates)
+                    state['target'] = target
+
+            if not state['returning'] and target is not None and target.alive:
+                start = (player.x, player.y)
+                dx, dy = target.x-player.x, target.y-player.y
+                distance = math.hypot(dx, dy)
+                travel = min(distance, 1750 * dt)
+                if distance > 1e-6:
+                    player.x += dx / distance * travel
+                    player.y += dy / distance * travel
+                    player.facing_angle = math.atan2(dy, dx)
+                end = (player.x, player.y)
+                if travel > 0:
+                    self.shadow_slashes.append({
+                        'segments': lightning_segments(start, end,
+                            int(self.game_time*10000)+random.randrange(10000), 4),
+                        'timer': .13, 'duration': .13,
+                        'color': (96, 231, 226),
+                    })
+                    # Hit anything the fast ricochet crosses, with no dash cooldown.
+                    sx, sy = end[0]-start[0], end[1]-start[1]
+                    length_sq = sx*sx + sy*sy or 1.0
+                    crossed = []
+                    for enemy in nearby:
+                        if id(enemy) in state['visited']:
+                            continue
+                        t = max(0.0, min(1.0,
+                            ((enemy.x-start[0])*sx+(enemy.y-start[1])*sy)/length_sq))
+                        px, py = start[0]+sx*t, start[1]+sy*t
+                        gap = math.hypot(enemy.x-px, enemy.y-py)
+                        if gap <= enemy.size + player.size + 24:
+                            crossed.append((t, enemy))
+                    for _, enemy in sorted(crossed, key=lambda pair: pair[0]):
+                        if not enemy.alive:
+                            continue
+                        state['visited'].add(id(enemy))
+                        state['last_target'] = id(enemy)
+                        nx, ny = enemy.x-start[0], enemy.y-start[1]
+                        norm = math.hypot(nx, ny) or 1.0
+                        self.deal_damage_to_enemy(
+                            enemy, 145 + player.get_fist_damage()*1.45,
+                            knockback_force=360, knockback_dir_x=nx/norm,
+                            knockback_dir_y=ny/norm, can_crit=False,
+                            can_stun=False, can_lifesteal=False,
+                            particle_color=(96, 231, 226), particle_count=8, source='ult'
+                        )
+                if distance <= travel + 2:
+                    state['visited'].add(id(target))
+                    state['last_target'] = id(target)
+                    state['target'] = None
+                    self.camera.add_shake(4, .08)
+        if state['returning']:
+            ox, oy = state['origin']
+            dx, dy = ox-player.x, oy-player.y
+            distance = math.hypot(dx, dy)
+            travel = min(distance, 1750 * dt)
+            if distance > 1e-6:
+                player.x += dx / distance * travel
+                player.y += dy / distance * travel
+            if distance <= travel + 1:
+                player.x, player.y = ox, oy
+                player.velocity_x = player.velocity_y = 0.0
+                player.ultimate_action_lock = False
+                player.slide_charges = 0
+                player.slide_cooldown_timer = player.get_slide_cooldown()
+                player.speed_boost_timer = 5.0
+                player.speed_boost_multiplier = 1.55
+                self.slider_ultimate = None
+
+    def _update_spark_storm(self, dt):
+        if self.spark_storm_timer <= 0:
+            return
+        self.spark_storm_timer = max(0.0, self.spark_storm_timer-dt)
+        self.spark_storm_tick -= dt
+        for drop in self.rain_drops:
+            drop[0] -= 165 * dt
+            drop[1] += drop[2] * dt
+            if drop[1] > SCREEN_HEIGHT + 20 or drop[0] < -20:
+                drop[0] = random.uniform(0, SCREEN_WIDTH + 80)
+                drop[1] = random.uniform(-90, -10)
+                drop[2] = random.uniform(420, 760)
+        if self.spark_storm_tick <= 0:
+            self.spark_storm_tick += .42
+            targets = [e for e in self.enemies if e.alive
+                       and math.hypot(e.x-self.player.x, e.y-self.player.y) <= 580]
+            if targets:
+                target = random.choice(targets)
+                start, end = (self.player.x, self.player.y), (target.x, target.y)
+                self.lightning_bolts.append({
+                    'segments': lightning_segments(start, end,
+                        int(self.game_time*10000)+random.randrange(10000)),
+                    'timer': .3, 'duration': .3,
+                })
                 self.deal_damage_to_enemy(
-                    enemy, player.get_fist_damage()*5.2,
+                    target, 72 + self.player.get_fist_damage()*.45,
                     can_crit=False, can_stun=False, can_lifesteal=False,
-                    particle_color=(203, 166, 247), particle_count=16, source='ult'
+                    particle_color=(250, 220, 110), particle_count=8, source='ult'
                 )
-                if enemy.alive:
-                    enemy.stun_timer = max(getattr(enemy, 'stun_timer', 0), .55)
-                previous = (ex, ey)
-            if not targets:
-                for i in range(8):
-                    angle = i*math.tau/8
-                    end = (x+math.cos(angle)*150, y+math.sin(angle)*150)
-                    self.shadow_slashes.append({'segments': lightning_segments((x, y), end, i+int(self.game_time*1000), 5),
-                                                'timer': .38, 'duration': .38})
-            self._ring(player.x, player.y, 210, (203, 166, 247), .7)
+                if target.alive:
+                    target.stun_timer = max(getattr(target, 'stun_timer', 0), .2)
+
+    def _draw_spark_storm_weather(self):
+        if self.spark_storm_timer <= 0:
+            return
+        elapsed = self.spark_storm_duration - self.spark_storm_timer
+        fade_in = min(1.0, elapsed / .8)
+        fade_out = min(1.0, self.spark_storm_timer / 1.4)
+        intensity = min(fade_in, fade_out)
+        overlay = self.storm_overlay_surface
+        overlay.fill((4, 7, 15, int(226 * intensity)))
+        self.screen.blit(overlay, (0, 0))
+        rain_color = (int(55+95*intensity), int(70+107*intensity),
+                      int(88+117*intensity))
+        for x, y, speed, length in self.rain_drops:
+            pygame.draw.line(self.screen, rain_color,
+                             (int(x), int(y)), (int(x-9), int(y+length*.045)), 1)
+
+    def _update_shadow_ult_blades(self, dt):
+        if not self.shadow_ult_blades:
+            return
+        speed = math.tau * 2.5  # Four complete turns in 1.6 seconds.
+        for blade in self.shadow_ult_blades:
+            blade['delay'] = max(0.0, blade['delay']-dt)
+            if blade['delay'] > 0 or blade['turns'] >= 4.0:
+                continue
+            delta = min(speed*dt, (4.0-blade['turns'])*math.tau)
+            blade['angle'] += blade['direction'] * delta
+            blade['turns'] += delta/math.tau
+            if blade['turns'] >= 4.0 - 1e-8:
+                blade['turns'] = 4.0
+            for enemy_id in list(blade['hit_cooldowns']):
+                blade['hit_cooldowns'][enemy_id] -= dt
+                if blade['hit_cooldowns'][enemy_id] <= 0:
+                    del blade['hit_cooldowns'][enemy_id]
+            bx = self.player.x + math.cos(blade['angle'])*94
+            by = self.player.y + math.sin(blade['angle'])*94
+            for enemy in self.enemies:
+                if (not enemy.alive or id(enemy) in blade['hit_cooldowns']
+                        or math.hypot(enemy.x-bx, enemy.y-by) > enemy.size+15):
+                    continue
+                damage = self.player.get_fist_damage()*1.8
+                self.deal_damage_to_enemy(
+                    enemy, damage, can_crit=False, can_stun=False,
+                    can_lifesteal=False, particle_color=(203, 166, 247),
+                    particle_count=7, source='ult'
+                )
+                healed = self.player.lifesteal(damage)
+                if healed > .5:
+                    self.particle_manager.spawn_heal_particles(
+                        self.player.x, self.player.y, count=3
+                    )
+                blade['hit_cooldowns'][id(enemy)] = .22
+        if all(blade['turns'] >= 4.0 for blade in self.shadow_ult_blades):
+            self.shadow_ult_blades.clear()
 
     def _update_ultimate_cast(self, dt):
         if self.ultimate_cast_pending:
@@ -990,6 +1176,8 @@ class Game:
             slash['timer'] -= dt
         self.shadow_slashes = [s for s in self.shadow_slashes if s['timer'] > 0]
         self.earthquake_crack_timer = max(0.0, self.earthquake_crack_timer-dt)
+        self._update_spark_storm(dt)
+        self._update_shadow_ult_blades(dt)
 
         for zone in self.storm_zones:
             zone['timer'] -= dt
@@ -1038,14 +1226,18 @@ class Game:
 
     def _draw_ultimate_world_effects(self):
         if self.earthquake_crack_timer > 0:
-            fade = min(1.0, self.earthquake_crack_timer/.6)
-            bright = (int(95*fade), int(72*fade), int(54*fade))
-            dark = (24, 20, 20)
+            # Stay nearly black for most of 15 seconds, then fade smoothly.
+            fade_start = 3.0
+            fade = min(1.0, self.earthquake_crack_timer / fade_start)
+            alpha = int(235 * fade)
+            overlay = self.crack_overlay_surface
+            overlay.fill((0, 0, 0, 0))
             for start, end in self.earthquake_cracks:
                 a = self.camera.apply(*start)
                 b = self.camera.apply(*end)
-                pygame.draw.line(self.screen, dark, a, b, 5)
-                pygame.draw.line(self.screen, bright, a, b, 2)
+                pygame.draw.line(overlay, (8, 7, 9, alpha), a, b, 7)
+                pygame.draw.line(overlay, (24, 18, 19, int(170*fade)), a, b, 3)
+            self.screen.blit(overlay, (0, 0))
         for ring in self.ultimate_rings:
             progress = min(1.0, ring['age']/ring['duration'])
             radius = max(2, int(ring['radius']*progress))
@@ -1062,10 +1254,23 @@ class Game:
                               (self.shadow_slashes, (203, 166, 247))):
             for effect in effects:
                 ratio = effect['timer']/effect['duration']
-                tint = tuple(int(c*ratio) for c in base)
+                tint = tuple(int(c*ratio) for c in effect.get('color', base))
                 for start, end in effect['segments']:
                     pygame.draw.line(self.screen, (28, 25, 30), self.camera.apply(*start), self.camera.apply(*end), 6)
                     pygame.draw.line(self.screen, tint, self.camera.apply(*start), self.camera.apply(*end), 3)
+        for blade in self.shadow_ult_blades:
+            if blade['delay'] > 0 or blade['turns'] >= 4.0:
+                continue
+            bx = self.player.x + math.cos(blade['angle']) * 94
+            by = self.player.y + math.sin(blade['angle']) * 94
+            center = self.camera.apply(bx, by)
+            tip = (center[0] + math.cos(blade['angle'] + math.pi/2) * 20,
+                   center[1] + math.sin(blade['angle'] + math.pi/2) * 20)
+            tail = (center[0] - math.cos(blade['angle'] + math.pi/2) * 20,
+                    center[1] - math.sin(blade['angle'] + math.pi/2) * 20)
+            pygame.draw.line(self.screen, (39, 20, 53), tail, tip, 11)
+            pygame.draw.line(self.screen, (203, 166, 247), tail, tip, 6)
+            pygame.draw.line(self.screen, (244, 231, 255), tail, tip, 2)
         for body in self.ultimate_bodies:
             body.draw(self.screen, self.camera)
 
@@ -2217,6 +2422,7 @@ class Game:
         # Render-only culling: entities continue updating off-screen.
         # Игрок
         self.player.draw(self.screen, self.camera)
+        self._draw_spark_storm_weather()
         self._draw_ultimate_world_effects()
 
         # Частицы и числа урона
