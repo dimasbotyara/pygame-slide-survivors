@@ -93,7 +93,6 @@ def create_all_upgrades():
     upgrades.append(Upgrade("ult_per_kill", PURPLE, "ult_per_kill", 1, max_level=3, category="utility"))
     upgrades.append(Upgrade("hit_grace", SILVER, "hit_grace", 0.15, max_level=4, category="utility"))
     upgrades.append(Upgrade("boost_duration", LIME, "boost_duration", 2, max_level=3, category="utility"))
-    upgrades.append(Upgrade("dash_heal", PINK, "dash_heal", 3, max_level=4, category="slide"))
 
     # ──── БАЗОВЫЕ ────
     upgrades.append(Upgrade("max_hp", RED, "max_hp", 20, category="basic"))

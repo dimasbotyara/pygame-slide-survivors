@@ -23,18 +23,17 @@ Choose English or Russian on first launch. Equip **Slider**, **Brawler**, **Spar
 | --- | --- |
 | Move and aim | WASD or arrow keys to move; mouse to aim |
 | Slide | Hold Space or Shift; release to stop |
-| Dash attack | Left-click just after a slide (no on-screen reminder) |
 | Ultimate | Q or right-click when charged |
 | Choose an upgrade | 1–3, click a card, or use Left/Right and Enter |
 | Pause | Esc or P |
 
-In numbered menus, the matching digit works like a click (top row or keypad). In Settings, **1–5 select tabs** instead; Up/Down select a row, Left/Right or Enter change its value, and Esc goes back. **Pause → Surrender** ends the run and submits the result to the same local leaderboard as a defeat.
+In numbered menus, the matching digit works like a click (top row or keypad). In Settings, **1–6 select tabs** instead; Up/Down select a row, Left/Right or Enter change its value, and Esc goes back. **Pause → Surrender** ends the run and submits the result to the same local leaderboard as a defeat.
 
 ## Display, effects and accessibility
 
 Drag the window edges to resize it, or choose a resolution and fullscreen in **Settings → Display**. **Alt+Enter** toggles fullscreen. The game preserves its 16:9 canvas with letterboxing; clicks, aiming and trainer controls are mapped to the scaled image. Unsupported display modes fall back to a 1280×720 window.
 
-Settings have **33 options across five tabs**, selected with **1–5** (including keypad), **Tab / Shift+Tab**, or mouse:
+Settings have six tabs, selected with **1–6** (including keypad), **Tab / Shift+Tab**, or mouse:
 
 - **Display:** fullscreen, resolution, 30–240 FPS or unlimited, FPS counter, smooth scaling, pause on focus loss.
 - **Effects:** particle density (off to 3×, default 2×), particle budget, camera shake, screen flashes, slide trails and particles, biome decorations, off-screen culling.
@@ -128,3 +127,9 @@ The trainer is optional and keeps its English developer labels. Unlock/reset ach
 ### Saves and settings
 
 The last selected hero is remembered between launches. Set the window size in Settings; dragging the window edge does not resize it. The button at the bottom of Settings can delete high scores, achievements and settings after confirmation, then quit the game. Every field guide tab has a filter (button or F).
+
+Movement, slide, ultimate and pause keys can be rebound in the Keys settings tab; Esc cancels. Conflicting keys are swapped.
+
+### Website
+
+The static GitHub Pages landing page lives in [`website/`](website/README.md), built with Angular, ng-brutalism and Tailwind CSS. Enable **GitHub Actions** as the Pages source in repository settings; the workflow deploys after changes reach `main`.

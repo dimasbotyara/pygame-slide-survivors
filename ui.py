@@ -10,7 +10,7 @@ from heroes import HEROES, HERO_KEYS
 from achievements import ACHIEVEMENTS_LIST
 from typography import TextFont
 from consumables import tonic_icon
-from preferences import TABS, DEFAULTS
+from preferences import TABS, DEFAULTS, BINDINGS
 
 INK = (12, 18, 29)
 PANEL = (23, 34, 50)
@@ -412,7 +412,7 @@ class UI:
         bar_y = 35
 
         is_enraged = getattr(boss, 'is_enraged', False)
-        title_text = t("BOSS_HP_TITLE")
+        title_text = t("MOB_" + boss.variant)
         title_s = self.font.render(title_text, True, RED if is_enraged else GOLD)
         title_r = title_s.get_rect(center=(SCREEN_WIDTH // 2, 18))
         screen.blit(title_s, title_r)
@@ -730,7 +730,7 @@ class UI:
     # ================================================================
     # НАСТРОЙКИ
     # ================================================================
-    def draw_settings_screen(self, screen, selected_option, settings_manager, tab=0):
+    def draw_settings_screen(self, screen, selected_option, settings_manager, tab=0, binding_capture=None):
         screen.fill(INK)
         screen.blit(self.mono.render('SS / '+t('SETTINGS_TITLE'), True, MINT), (70, 35))
         pygame.draw.line(screen, EDGE, (70, 76), (1210, 76))
@@ -745,7 +745,9 @@ class UI:
                 pygame.draw.rect(screen, MINT, (rect.x, rect.y+9, 3, rect.h-18), border_radius=1)
             screen.blit(self.body.render(t('OPT_'+key), True, PAPER), (rect.x+20, rect.y+12))
             value = settings_manager.get(key)
-            if type(value) is bool:
+            if key in BINDINGS:
+                text = t('BIND_PRESS') if binding_capture == key else pygame.key.name(value).upper()
+            elif type(value) is bool:
                 text = t('SETTING_ON' if value else 'SETTING_OFF')
             elif key == 'resolution':
                 text = t('NATIVE_RESOLUTION') if value == (0, 0) else f'{value[0]} × {value[1]}'
@@ -1049,12 +1051,12 @@ class UI:
         screen.blit(title, title_rect)
 
         controls = [
-            (t("CTRL_MOVE_KEY"), t("CTRL_MOVE_DESC")),
-            (t("CTRL_SLIDE_KEY"), t("CTRL_SLIDE_DESC")),
-            (t("CTRL_ULT_KEY"), t("CTRL_ULT_DESC")),
+            (" / ".join(pygame.key.name(self.setting(k)).upper() for k in ("bind_up", "bind_left", "bind_down", "bind_right")), t("CTRL_MOVE_DESC")),
+            (pygame.key.name(self.setting("bind_slide")).upper(), t("CTRL_SLIDE_DESC")),
+            (pygame.key.name(self.setting("bind_ultimate")).upper() + " / " + t("CTRL_ULT_KEY").split(" / ")[-1], t("CTRL_ULT_DESC")),
             (t("CTRL_LOOK_KEY"), t("CTRL_LOOK_DESC")),
             (t("CTRL_SELECT_KEY"), t("CTRL_SELECT_DESC")),
-            (t("CTRL_PAUSE_KEY"), t("CTRL_PAUSE_DESC")),
+            ("Esc / " + pygame.key.name(self.setting("bind_pause")).upper(), t("CTRL_PAUSE_DESC")),
             ("", ""),
             (t("CTRL_HEADER_SLIDE"), ""),
             ("", t("CTRL_SLIDE_INFO_1")),

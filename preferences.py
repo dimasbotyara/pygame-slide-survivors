@@ -1,4 +1,10 @@
 """Shared settings schema: every exposed option has a runtime consumer."""
+import pygame
+
+BINDINGS = {"bind_up": pygame.K_w, "bind_down": pygame.K_s, "bind_left": pygame.K_a,
+            "bind_right": pygame.K_d, "bind_slide": pygame.K_SPACE,
+            "bind_ultimate": pygame.K_q, "bind_pause": pygame.K_p}
+
 # (key, choices); bool choices are displayed as translated on/off values.
 TABS = (
     ('DISPLAY', (
@@ -45,9 +51,11 @@ TABS = (
         ('crosshair', (False, True)),
         ('notification_duration', (1.5, 2.5, 3.5, 5)),
     )),
+    ('CONTROLS', tuple((key, (value,)) for key, value in BINDINGS.items())),
 )
 
 DEFAULTS = {
+    **BINDINGS,
     'fullscreen': False, 'resolution': (1280, 720), 'fps_limit': 60,
     'show_fps': False, 'smooth_scaling': True, 'pause_unfocused': True,
     'particle_density': 2, 'particle_budget': 2400, 'screen_shake': True,
@@ -65,6 +73,8 @@ DEFAULTS = {
 
 
 def valid_value(key, value):
+    if key in BINDINGS:
+        return type(value) is int and 0 < value <= 2147483647 and value != pygame.K_ESCAPE and bool(pygame.key.name(value))
     if key == 'resolution':
         if isinstance(value, (list, tuple)) and list(value) == [0, 0] and all(type(n) is int for n in value):
             return True

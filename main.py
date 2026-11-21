@@ -24,7 +24,7 @@ from highscores import add_highscore
 from settings_manager import SettingsManager
 from display_manager import DisplayManager
 from game_icon import make_icon
-from preferences import TABS
+from preferences import TABS, BINDINGS, valid_value
 from ui import NUMBER_KEYS, settings_tab_rect, reset_button_rect, reset_confirm_rect, reset_cancel_rect
 from translations import t
 from heroes import HEROES, HERO_KEYS
@@ -93,6 +93,7 @@ class Game:
         self.settings_selection = 0
         self.settings_previous_state = "menu"
         self.reset_confirmation = False
+        self.binding_capture = None
         self.reset_error = False
         self.pause_selection = 0
         self.game_over_selection = 0
@@ -213,6 +214,8 @@ class Game:
 
     def apply_runtime_settings(self):
         cfg = self.settings_manager
+        if self.player:
+            self.player.bindings = {key: cfg.get(key) for key in BINDINGS}
         if self.camera:
             self.camera.culling_enabled = cfg.get("view_culling")
             self.camera.entity_shadows = cfg.get("entity_shadows")
@@ -266,6 +269,7 @@ class Game:
         self.shadow_slashes.clear()
         hero_id = HERO_KEYS[self.selected_hero_index]
         self.player = Player(0, 0, hero_id=hero_id)
+        self.player.bindings = {key: self.settings_manager.get(key) for key in BINDINGS}
         self.camera = Camera(SCREEN_WIDTH, SCREEN_HEIGHT)
         self.camera.shake_enabled = self.settings_manager.get("screen_shake", True)
         self.world = World(seed=self.world_seed)
@@ -436,6 +440,9 @@ class Game:
     def _change_setting(self, row_index, direction):
         rows = TABS[self.settings_tab][1]
         name, choices = rows[row_index]
+        if name in BINDINGS:
+            self.binding_capture = name
+            return
         current = self.settings_manager.get(name)
         index = choices.index(current) if current in choices else 0
         self.settings_manager.set(name, choices[(index + direction) % len(choices)])
@@ -463,6 +470,20 @@ class Game:
 
     def update_settings(self, events):
         for event in events:
+            if self.binding_capture is not None:
+                if event.type == pygame.KEYDOWN:
+                    key = event.key
+                    if key == pygame.K_ESCAPE:
+                        self.binding_capture = None
+                    elif valid_value(self.binding_capture, key):
+                        current = self.settings_manager.get(self.binding_capture)
+                        other = next((k for k in BINDINGS if k != self.binding_capture and self.settings_manager.get(k) == key), None)
+                        if other:
+                            self.settings_manager.settings[other] = current
+                        self.settings_manager.set(self.binding_capture, key)
+                        self.apply_runtime_settings()
+                        self.binding_capture = None
+                continue
             if self.reset_confirmation:
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_ESCAPE:
@@ -502,6 +523,8 @@ class Game:
                         self._change_setting(hit_row, -1)
                     elif settings_value_right_rect(hit_row).collidepoint(event.pos):
                         self._change_setting(hit_row, 1)
+                    elif TABS[self.settings_tab][1][hit_row][0] in BINDINGS:
+                        self.binding_capture = TABS[self.settings_tab][1][hit_row][0]
                     # The arrows are explicit controls; clicking elsewhere on a
                     # setting row only focuses it and cannot accidentally cycle it.
                     continue
@@ -527,7 +550,7 @@ class Game:
 
     def draw_settings(self):
         self._sync_theme()
-        self.ui.draw_settings_screen(self.screen, self.settings_selection, self.settings_manager, self.settings_tab)
+        self.ui.draw_settings_screen(self.screen, self.settings_selection, self.settings_manager, self.settings_tab, self.binding_capture)
         if self.display.error:
             text = self.ui.body.render(t('DISPLAY_FALLBACK'), True, (255, 170, 100))
             self.screen.blit(text, text.get_rect(center=(SCREEN_WIDTH//2, 605)))
@@ -587,7 +610,7 @@ class Game:
                 self.pause_selection = hovered
             if key is None:
                 continue
-            if key in (pygame.K_ESCAPE, pygame.K_p):
+            if key in (pygame.K_ESCAPE, self.settings_manager.get("bind_pause")):
                 self.state = "playing"
                 return
             elif key in (pygame.K_UP, pygame.K_w):
@@ -697,23 +720,17 @@ class Game:
     def update_playing(self, dt, events):
         """Обновление всей игровой логики"""
 
-        # Проверка паузы, ультимейта и dash-атаки из событий
+        # Проверка паузы и ультимейта из событий
         for event in events:
             if event.type == pygame.KEYDOWN:
-                if event.key in (pygame.K_ESCAPE, pygame.K_p):
+                if event.key in (pygame.K_ESCAPE, self.settings_manager.get("bind_pause")):
                     self.state = "paused"
                     self.pause_selection = 0
                     return
-                elif event.key == pygame.K_q:
+                elif event.key == self.settings_manager.get("bind_ultimate"):
                     self.trigger_hero_ult()
-            # Dash-атака по ЛКМ, ульт по ПКМ
-            if event.type == pygame.MOUSEBUTTONDOWN:
-                if event.button == 1 and self.player.ult_cast_timer <= 0:
-                    if self.player.try_dash_attack():
-                        self.camera.add_shake(SHAKE_BOSS_HIT)
-                        self.particle_manager.add_message(t("MSG_DASH"), ORANGE)
-                elif event.button == 3:
-                    self.trigger_hero_ult()
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 3:
+                self.trigger_hero_ult()
 
         self.game_time += dt
 
@@ -797,7 +814,6 @@ class Game:
         self.check_fist_attacks()
         self.check_fist_waves()
         self.check_ground_slam()
-        self.check_dash_attack()
         self.check_slide_knockback()
         self.check_counter_attack()
         self.check_enemy_attacks(dt)
@@ -898,7 +914,6 @@ class Game:
         self.player.is_sliding = False
         self.player.slide_current_speed = 0.0
         self.player.velocity_x = self.player.velocity_y = 0.0
-        self.player.dash_attack_active = False
         self.player.fist_attack_active = False
         self.camera.add_shake(2, self.ultimate_cast_duration)
         return True
@@ -1881,56 +1896,6 @@ class Game:
 
             if dist < pull_radius:
                 orb.being_collected = True
-
-    # ================================================================
-    # DASH-АТАКА
-    # ================================================================
-    def check_dash_attack(self):
-        """Проверить попадания dash-атаки (после скольжения + ЛКМ)"""
-        attack = self.player.get_dash_attack_area()
-        if attack is None:
-            return
-
-        attack_x = attack["x"]
-        attack_y = attack["y"]
-        attack_range = attack["range"]
-        base_damage = attack["damage"]
-
-        for enemy in self.enemies:
-            if not enemy.alive:
-                continue
-            if enemy in self.player.dash_attack_hit_enemies:
-                continue
-
-            dx = enemy.x - attack_x
-            dy = enemy.y - attack_y
-            dist = math.sqrt(dx * dx + dy * dy)
-
-            if dist > attack_range + enemy.size:
-                continue
-
-            # Направление откидывания
-            if dist > 0:
-                kb_dx = dx / dist
-                kb_dy = dy / dist
-            else:
-                rand_angle = random.random() * math.pi * 2
-                kb_dx = math.cos(rand_angle)
-                kb_dy = math.sin(rand_angle)
-
-            from_angle = math.atan2(-dy, -dx)
-
-            self.deal_damage_to_enemy(
-                enemy, base_damage, from_angle,
-                knockback_force=FIST_KNOCKBACK * 2.5,
-                knockback_dir_x=kb_dx, knockback_dir_y=kb_dy,
-                particle_color=ORANGE, particle_count=12,
-                source="dash"
-            )
-            if not self.player.dash_attack_hit_enemies and self.player.stats["dash_heal"]:
-                self.player.heal(self.player.stats["dash_heal"])
-                self.particle_manager.spawn_heal_particles(self.player.x, self.player.y, count=3)
-            self.player.dash_attack_hit_enemies.append(enemy)
 
     # ================================================================
     # СКОЛЬЖЕНИЕ — ОТКИДЫВАНИЕ
