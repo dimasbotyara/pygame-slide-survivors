@@ -27,3 +27,6 @@ website/node_modules/
 website/dist/
 website/.angular/
 website/out-tsc/
+
+# Screenshots staged from the repository during website builds
+website/public/screenshots/

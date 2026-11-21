@@ -14,6 +14,16 @@ class AppComponent {
   readonly language = signal<'en' | 'ru'>(this.loadLanguage());
   readonly menuOpen = signal(false);
   readonly copyState = signal<'idle' | 'copied' | 'error'>('idle');
+  readonly screenshots = [
+    { file: 'ingame', en: 'Gameplay', ru: 'Игровой процесс' },
+    { file: 'mainmenu', en: 'Main menu', ru: 'Главное меню' },
+    { file: 'selecthero', en: 'Hero selection', ru: 'Выбор героя' },
+    { file: 'bestiary', en: 'Bestiary', ru: 'Бестиарий' },
+    { file: 'achievements', en: 'Achievements', ru: 'Достижения' },
+    { file: 'settings', en: 'Settings', ru: 'Настройки' },
+    { file: 'pausemenu', en: 'Pause menu', ru: 'Меню паузы' },
+    { file: 'gameover', en: 'Run results', ru: 'Результаты забега' },
+  ] as const;
 
   constructor() { this.updateDocument(); }
   private loadLanguage(): 'en' | 'ru' {
