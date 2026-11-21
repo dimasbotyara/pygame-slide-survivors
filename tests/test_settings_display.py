@@ -226,6 +226,9 @@ class SettingsDisplayTests(unittest.TestCase):
         g._sync_theme()
         self.assertNotEqual(ui_module.MINT, shadow_accent)
         self.assertNotEqual(ui_module.INK, default_bg)
+        g.settings_manager.settings['show_fps'] = True
+        self.assertEqual(g.ui.INK, ui_module.INK)
+        g.present()  # Regression: the FPS overlay must use the active theme surface.
         for lang in ('ru', 'en'):
             set_language(lang)
             self.assertNotEqual(t('OPT_theme'), 'OPT_theme')
