@@ -10,8 +10,10 @@ os.environ.setdefault('SDL_VIDEODRIVER', 'dummy')
 os.environ.setdefault('SDL_AUDIODRIVER', 'dummy')
 import pygame
 
-from bestiary import (Bestiary, ENTRY_KEYS, FILTERS, PAGE_SIZE, base_enemy, category,
-                      facts, guide_rect, back_rect, filter_rect, row_rect, page_rect, name)
+from bestiary import (Bestiary, ENTRY_KEYS, FILTERS, PAGE_SIZE, TABS, TEMPORARY_KEYS,
+                      PERMANENT_KEYS, HERO_UPGRADE_KEYS, ABILITY_KEYS, base_enemy, category,
+                      facts, guide_rect, back_rect, filter_rect, filter_button_rect,
+                      tab_rect, row_rect, page_rect, name)
 from enemies import Enemy, Boss
 from main import Game
 from settings import ENEMY_TYPES
@@ -86,18 +88,39 @@ class BestiaryTests(unittest.TestCase):
         self.assertEqual(b.cursor, len(ENTRY_KEYS)-1)
         b.handle([pygame.event.Event(pygame.MOUSEWHEEL, y=1)])
         self.assertEqual(b.cursor, len(ENTRY_KEYS)-2)
-        for i, group in enumerate(FILTERS):
-            b.handle([click(filter_rect(i))])
-            self.assertEqual(b.cursor, 0)
+        # The enemy filter is one separate button that cycles (click or F).
+        self.assertEqual(filter_rect(0), filter_button_rect())
+        for group in FILTERS:
             self.assertTrue(all(group == 'all' or category(key) == group for key in b.entries))
-        b.handle([press(pygame.K_TAB)])
+            b.handle([click(filter_button_rect())])
+            self.assertEqual(b.cursor, 0)
         self.assertEqual(b.filter, 0)
-        b.handle([press(pygame.K_TAB, mod=pygame.KMOD_SHIFT)])
-        self.assertEqual(b.filter, 3)
-        b.handle([press(pygame.K_3)])
-        self.assertEqual(set(b.entries), set(RESIDENTS))
-        b.handle([press(pygame.K_KP2)])
+        b.handle([press(pygame.K_f)])
+        self.assertEqual(b.filter, 1)
         self.assertEqual(set(b.entries), set(ENEMY_TYPES))
+        b.handle([press(pygame.K_f)])
+        self.assertEqual(set(b.entries), set(RESIDENTS))
+        b.handle([press(pygame.K_f)])
+        self.assertEqual(set(b.entries), {'boss'})
+        b.handle([press(pygame.K_f)])
+        self.assertEqual(b.filter, 0)
+        # Tabs replace the old filter row: 1-5 / Tab / click select a tab.
+        for i, expected in enumerate((TEMPORARY_KEYS, PERMANENT_KEYS, ABILITY_KEYS, HERO_UPGRADE_KEYS)):
+            b.handle([click(tab_rect(i + 1))])
+            self.assertEqual((b.tab, b.cursor), (i + 1, 0))
+            self.assertEqual(tuple(b.entries), tuple(expected))
+        b.handle([press(pygame.K_1)])
+        self.assertEqual(b.tab, 0)
+        b.handle([press(pygame.K_TAB)])
+        self.assertEqual(b.tab, 1)
+        b.handle([press(pygame.K_TAB, mod=pygame.KMOD_SHIFT)])
+        self.assertEqual(b.tab, 0)
+        b.handle([press(pygame.K_KP2)])
+        self.assertEqual(b.tab, 1)
+        # The filter button does nothing outside the enemies tab.
+        before = b.filter
+        b.handle([press(pygame.K_f)])
+        self.assertEqual(b.filter, before)
 
     def test_stats_follow_actual_game_objects_and_resident_overrides(self):
         for key in ENTRY_KEYS:
@@ -136,6 +159,41 @@ class BestiaryTests(unittest.TestCase):
                 self.assertLessEqual(593+21*len(list(word_lines(ui.font_small, t('GUIDE_NATIVE_RULE'), 746))), 646)
             self.assertLess(ui.mono.size(t('GUIDE_HINT'))[0], 1140)
             self.assertLess(ui.font_small.size(t('GUIDE_BASE_NOTE'))[0], 1140)
+
+    def test_new_tabs_cover_temporary_permanent_abilities_and_hero_upgrades(self):
+        from consumables import TONICS
+        from heroes import HEROES
+        from upgrades import create_all_upgrades
+        ui = self.game.ui
+        b = self.guide
+        all_upgrades = {u.upgrade_id: u for u in create_all_upgrades()}
+        # Tabs partition the real game data exactly once.
+        self.assertEqual(set(PERMANENT_KEYS) | set(HERO_UPGRADE_KEYS), set(all_upgrades))
+        self.assertFalse(set(PERMANENT_KEYS) & set(HERO_UPGRADE_KEYS))
+        self.assertTrue(all(all_upgrades[k].category == 'hero' for k in HERO_UPGRADE_KEYS))
+        self.assertTrue(all(all_upgrades[k].category != 'hero' for k in PERMANENT_KEYS))
+        self.assertEqual(set(ABILITY_KEYS), set(HEROES))
+        self.assertTrue(set(TONICS) <= set(TEMPORARY_KEYS))
+        for lang in ('ru', 'en'):
+            set_language(lang)
+            for tab in TABS:
+                self.assertNotEqual(t('GUIDE_TAB_' + tab), 'GUIDE_TAB_' + tab)
+            for index, tab in enumerate(TABS):
+                b.tab, b.filter = index, 0
+                for cursor, key in enumerate(b.entries):
+                    b.cursor = cursor
+                    b.draw(self.game.screen, ui)
+                    self.assertNotIn('GUIDE_', b.entry_name(key))
+                    self.assertNotIn('GUIDE_', b.entry_subtitle(key))
+                    self.assertNotIn('GUIDE_', b.entry_description(key))
+                    self.assertNotIn('GUIDE_', ' '.join(b.entry_facts(key)))
+                    self.assertLessEqual(len(b.entry_facts(key)), 8)
+                    self.assertLessEqual(b.entry_icon(key).get_width(), 40)
+                    self.assertGreater(b.entry_preview(key).get_bounding_rect().w, 0)
+                    desc = b.entry_description(key)
+                    self.assertLessEqual(484 + 24 * len(list(word_lines(ui.body, desc, 746))), 593)
+                    self.assertLess(ui.font_medium.size(b.entry_name(key))[0], 1200)
+            self.assertLess(ui.mono.size(t('GUIDE_HINT'))[0], 1140)
 
     def test_lobby_button_click_is_mapped_at_1440_by_900(self):
         g = self.game

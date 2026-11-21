@@ -176,6 +176,49 @@ class SettingsDisplayTests(unittest.TestCase):
         g.update_playing(.01, [])
         self.assertFalse(g.particle_manager.messages)
 
+    def test_notifications_start_below_combo_xp_strip(self):
+        from particles import GameMessage, NOTIFICATION_TOP_Y
+        # Combo text (y=80) + XP bonus + timer bar end around y=150 at max scale.
+        self.assertGreaterEqual(NOTIFICATION_TOP_Y, 170)
+        g = self.game
+        g.start_new_game()
+        g.screen.fill('black')
+        message = GameMessage('Test notification', duration=3.0)
+        message.lifetime = message.max_lifetime - 1.0  # settled: no slide offset
+        message.draw(g.screen, g.particle_manager.message_font)
+        # Nothing is drawn at the old overlapping position (y=113).
+        self.assertEqual(g.screen.get_at((SCREEN_WIDTH // 2, 120)), pygame.Color('black'))
+        # The card itself sits below the combo strip.
+        self.assertNotEqual(g.screen.get_at((SCREEN_WIDTH // 2, NOTIFICATION_TOP_Y + 5)),
+                            pygame.Color('black'))
+
+    def test_theme_option_defaults_to_selected_hero_and_supports_custom_palette(self):
+        import ui as ui_module
+        g = self.game
+        self.assertEqual(g.settings_manager.get('theme'), 'hero')
+        g.selected_hero_index = 3  # Shadow
+        g._sync_theme()
+        shadow_accent = HEROES['shadow']['color']
+        self.assertEqual(ui_module.MINT, shadow_accent)
+        default_bg = ui_module.INK
+        g.settings_manager.set('theme', 'green')
+        g._sync_theme()
+        self.assertNotEqual(ui_module.MINT, shadow_accent)
+        self.assertNotEqual(ui_module.INK, default_bg)
+        for lang in ('ru', 'en'):
+            set_language(lang)
+            self.assertNotEqual(t('OPT_theme'), 'OPT_theme')
+            self.assertNotEqual(t('THEME_green'), 'THEME_green')
+        self.assertIn(('theme', ('hero', 'cyan', 'red', 'yellow', 'purple', 'green', 'orange')),
+                      TABS[2][1])
+
+    def test_settings_note_has_no_culling_sentence(self):
+        for lang in ('ru', 'en'):
+            set_language(lang)
+            note = t('SETTINGS_NOTE')
+            self.assertNotIn('culling', note.lower())
+            self.assertIn('Alt+Enter', note)
+
     def test_ultimate_text_fits_bar_for_every_hero_and_language(self):
         for lang in ('ru', 'en'):
             set_language(lang)

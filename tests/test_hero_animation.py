@@ -78,6 +78,31 @@ class HeroAnimationTests(unittest.TestCase):
                 self.assertEqual(g.ui._hero_direction, step)
                 self.assertEqual(g.ui._hero_started, ticks)
 
+    def test_arrow_buttons_never_move_during_hero_transition(self):
+        g = self.game
+        g.settings_manager.set('theme', 'cyan')  # keep palette fixed while testing motion
+        g.ui.mouse_pos = lambda: (0, 0)
+        def arrow_pixels():
+            return tuple(pygame.image.tostring(
+                g.screen.subsurface(hero_arrow_rect(step)), 'RGB') for step in (-1, 1))
+        with patch('pygame.time.get_ticks', return_value=1000):
+            g.draw_menu()
+            before = arrow_pixels()
+            g.update_menu([pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RIGHT)])
+            g.draw_menu()
+            self.assertEqual(before, arrow_pixels())
+        with patch('pygame.time.get_ticks', return_value=1130):
+            g.draw_menu()
+            self.assertEqual(before, arrow_pixels())
+        with patch('pygame.time.get_ticks', return_value=1400):
+            g.draw_menu()
+            self.assertEqual(before, arrow_pixels())
+        # The animated content rect must not overlap either arrow button.
+        card = pygame.Rect(661, 202, 549, 405)
+        content = pygame.Rect(card.x + 104, 260, card.w - 208, 220)
+        for step in (-1, 1):
+            self.assertFalse(content.colliderect(hero_arrow_rect(step)))
+
     def test_dash_window_has_no_hud_hint_and_attack_still_works(self):
         g = self.game
         g.start_new_game()

@@ -94,6 +94,11 @@ class DamageNumber:
         screen.blit(text_surface, (int(sx), int(sy)))
 
 
+# Notifications start below the combo HUD (combo text + XP bonus + timer bar
+# end around y=150 at max scale), so cards never cover the combo XP strip.
+NOTIFICATION_TOP_Y = 175
+
+
 class GameMessage:
     """Игровое сообщение на экране (например, 'Враги усилились!')"""
 
@@ -132,7 +137,7 @@ class GameMessage:
         pygame.draw.rect(card, (38, 50, 65), (20, height-7, 510, 2))
         pygame.draw.rect(card, self.color, (20, height-7, round(510*progress), 2))
         card.set_alpha(alpha)
-        screen.blit(card, (SCREEN_WIDTH//2-275, 113+y_offset-round(9*max(0, 1-age/.18))))
+        screen.blit(card, (SCREEN_WIDTH//2-275, NOTIFICATION_TOP_Y+y_offset-round(9*max(0, 1-age/.18))))
         return height+8
 
 
