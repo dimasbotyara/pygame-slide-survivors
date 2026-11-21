@@ -6,7 +6,7 @@
 
 A top-down arena roguelike built with Pygame. Your hero punches automatically; you aim the fists and steer the slide. Slip past a crab just before its attack lands, turn back with a charged cleave, and collect the XP before the next wave reaches you.
 
-## Screenshots
+## 📸 Screenshots
 
 | Gameplay | Main menu |
 | :---: | :---: |
@@ -18,7 +18,7 @@ A top-down arena roguelike built with Pygame. Your hero punches automatically; y
 | **Pause menu** | **Run results** |
 | ![Pause menu](screenshots/pausemenu-en.png) | ![Run results](screenshots/gameover-en.png) |
 
-## Start a run
+## 🎮 Start a run
 
 From the project directory, with Python 3 and pip installed:
 
@@ -29,7 +29,7 @@ python main.py
 
 Choose English or Russian on first launch. Equip **Slider**, **Brawler**, **Spark**, or **Shadow** in **Heroes**, or cycle through them using the arrows on the lobby card. Choosing a hero doesn't start the clock: press **1 — Play** when you're ready. Fonts for both languages, symbols, and monochrome emoji ship with the game; no system font setup is needed.
 
-## Controls
+## 🎯 Controls
 
 | Action | Input |
 | --- | --- |
@@ -74,7 +74,7 @@ See [performance notes and reproducible benchmarks](docs/performance.md). This i
 - **Build around how you move.** XP orbs earn levels and upgrade cards. Ice Trail makes pursuers keep their heading on slippery ground: turn back once they're on it. Repulsion pushes crowds away, Siphon drains the closest foe, and Stasis slows incoming shots. Bosses bring their own arena walls.
 - **Pickups aren't permanent upgrades.** Alongside heals, magnets, bombs and speed boosts, enemies can drop **12 timed pickups**. Ember Pepper boosts punches, Ruby Fang lets hits heal you, and Comet Wax speeds up slides. These twelve effects last **8–12 seconds** of play. Different bonuses coexist; another copy refreshes its timer instead of doubling its strength. Watch the icons above the XP bar.
 
-## In-game bestiary
+## 📖 In-game bestiary
 
 Open **Bestiary** from the button at the top right of the lobby, or press **B / 8** (keypad 8 also works). It contains every current enemy: **14 regular types, 10 biome residents and the boss**. All entries are available immediately; no discovery grind or internet access is required.
 
@@ -142,6 +142,6 @@ The last selected hero is remembered between launches. Set the window size in Se
 
 Movement, slide, ultimate and pause keys can be rebound in the Keys settings tab; Esc cancels. Conflicting keys are swapped.
 
-### Website
+### 🌐 Website
 
-The static GitHub Pages landing page lives in [`website/`](website/README.md), built with Angular, ng-brutalism and Tailwind CSS. Enable **GitHub Actions** as the Pages source in repository settings; the workflow deploys after changes reach `main`.
+The static GitHub Pages landing page lives in [`website/`](website/README.md), built with Angular, [ng-brutalism](https://github.com/khangtrannn/ng-brutalism) and Tailwind CSS. Enable **GitHub Actions** as the Pages source in repository settings; the workflow deploys after changes reach `main`.

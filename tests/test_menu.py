@@ -35,6 +35,27 @@ class MenuTests(unittest.TestCase):
         self.game = Game()
         self.game.state = 'menu'
 
+    def test_hero_names_and_achievements_in_both_languages(self):
+        self.addCleanup(set_language, 'ru')
+        for lang, expected in (
+            ('ru', ('Слайдер', 'Браулер', 'Спарк', 'Шэдоу')),
+            ('en', ('Slider', 'Brawler', 'Spark', 'Shadow')),
+        ):
+            set_language(lang)
+            for hero, name in zip(('slider', 'brawler', 'spark', 'shadow'), expected):
+                self.assertEqual(t('hero_' + hero + '_name'), name)
+                self.assertIn(name, t('ach_' + hero + '_path_title'))
+            self.game.draw_menu()
+            self.game.draw_hero_select()
+            # The guide uses these same translations for ability and upgrade filters.
+            from bestiary import Bestiary
+            guide = Bestiary()
+            for tab in (3, 4):
+                guide.tab = tab
+                guide.filter = 2
+                self.assertEqual(guide.filter_label(), expected[1])
+                guide.draw(self.game.screen, self.game.ui)
+
     def test_equip_is_not_start_and_escape_keeps_hero(self):
         g = self.game
         g.update_menu([click(menu_rect(1))])
