@@ -54,6 +54,23 @@ def create_all_upgrades():
     upgrades.append(Upgrade("shadow_blade_mastery", PURPLE, "crit_chance", 15, max_level=3, category="hero", hero_id="shadow"))
     upgrades.append(Upgrade("shadow_soul_drain", DARK_PURPLE, "fist_lifesteal", 5, max_level=4, category="hero", hero_id="shadow"))
 
+    # Permanent-in-run hero passives: powerful, stack-limited choices that
+    # reinforce each fighter's signature movement and combat style.
+    upgrades.extend((
+        Upgrade("slider_ghost_drive", CYAN, "slide_duration", 12, max_level=3, category="hero", hero_id="slider"),
+        Upgrade("slider_corner_cut", WHITE, "slide_turn_speed", 18, max_level=3, category="hero", hero_id="slider"),
+        Upgrade("slider_impact_charge", CYAN, "slide_damage", 20, max_level=3, category="hero", hero_id="slider"),
+        Upgrade("brawler_ironhide", RED, "armor", 2, max_level=3, category="hero", hero_id="brawler"),
+        Upgrade("brawler_long_combo", ORANGE, "fist_combo_hits", 1, max_level=2, category="hero", hero_id="brawler"),
+        Upgrade("brawler_crescent_swing", RED, "fist_arc_bonus", 15, max_level=3, category="hero", hero_id="brawler"),
+        Upgrade("spark_chain_reactor", YELLOW, "target_count", 1, max_level=3, category="hero", hero_id="spark"),
+        Upgrade("spark_stun_field", GOLD, "fist_stun_chance", 10, max_level=3, category="hero", hero_id="spark"),
+        Upgrade("spark_wave_conductor", YELLOW, "fist_wave", 1, max_level=3, category="hero", hero_id="spark"),
+        Upgrade("shadow_critical_edge", PURPLE, "crit_multiplier", 35, max_level=3, category="hero", hero_id="shadow"),
+        Upgrade("shadow_night_blood", DARK_PURPLE, "fist_lifesteal", 3, max_level=4, category="hero", hero_id="shadow"),
+        Upgrade("shadow_quickstep", PURPLE, "slide_cooldown", 8, max_level=5, category="hero", hero_id="shadow"),
+    ))
+
     # ──── 🛡️ НОВЫЕ ОБЩИЕ УЛУЧШЕНИЯ ────
     upgrades.append(Upgrade("shield_wall", CYAN, "shield_max", 30, max_level=5, category="utility"))
     upgrades.append(Upgrade("executioner", CRIMSON, "executioner_chance", 15, max_level=3, category="basic"))

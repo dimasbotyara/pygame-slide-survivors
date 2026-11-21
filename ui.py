@@ -931,6 +931,9 @@ class UI:
         screen.blit(self.mono.render(t('ULT_LABEL'), True, MUTED), (x, 509))
         screen.blit(self.font.render('⚡ ' + t(hero['ult_id']+'_name'), True, accent), (x, 538))
         current = screen.subsurface(content_rect).copy()
+        # The active hero theme changes the card's PANEL colour. Cache only
+        # the foreground so the previous theme cannot travel as a dark tile.
+        current.set_colorkey(self.PANEL)
         progress = min(1, (now-getattr(self, '_hero_started', -1000))/260)
         if progress < 1 and self.setting("hero_animations"):
             screen.blit(hero_before, content_rect)
