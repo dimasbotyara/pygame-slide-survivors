@@ -306,16 +306,16 @@ TRANSLATIONS = {
 
         # Hero Ultimates
         "ult_chrono_slide_name": "Хроно-Рывок",
-        "ult_chrono_slide_desc": "Сброс зарядов + гипер-скорость + шок-волны на 4с",
+        "ult_chrono_slide_desc": "Слайдер собирает энергию времени, высвобождая волну, которая отбрасывает ближайших врагов. Затем герой срывается в хронорывок: становится неуязвимым, скользит быстрее и оставляет за собой шлейф кинетических разрядов.",
 
         "ult_earthquake_slam_name": "Дрожь Земли",
-        "ult_earthquake_slam_desc": "Сейсмо-удар на 350 урона + стягивание и стан 3.5с",
+        "ult_earthquake_slam_desc": "Кулак бойца обрушивается на арену, и под ногами расходится сеть раскалённых трещин. Ударная волна отбрасывает врагов; павшие тела взлетают в воздух и становятся снарядами. Каждый обломок, попавший в противника, порождает новую волну сокрушительного эха.",
 
         "ult_chain_lightning_name": "Цепной Шторм",
-        "ult_chain_lightning_desc": "12 молний по цепи + штормовые электрозоны",
+        "ult_chain_lightning_desc": "Молния разрывает ткань небес и призывает двенадцать разрядов древнего божества. Они пронзают врагов и скачут от цели к цели, оставляя на земле пульсирующие штормовые разломы. Их эпицентры испепеляют противников и оглушают каждого, кто осмелится войти в бурю.",
 
         "ult_shadow_dance_name": "Танец Теней",
-        "ult_shadow_dance_desc": "Телепорты по 10 врагам с 4x критом + лечение",
+        "ult_shadow_dance_desc": "Тень растворяется во вспышке лилового дыма и возникает за спинами врагов. До десяти быстрых рассечений проходят сквозь толпу, оставляя призрачные следы и вытягивая жизненную силу. Последний удар переносит героя в новую точку боя.",
 
         # Achievements Screen
         "ACH_TITLE": "ДОСТИЖЕНИЯ",
@@ -339,6 +339,8 @@ TRANSLATIONS = {
 
         # Ultimate & Boss
         "ULT_READY": "Q / ПКМ — {}!",
+        "ULT_COOLDOWN": "Перезарядка ультимейта: {} с",
+        "ULT_CASTING": "Применение ультимейта: {} с",
         "ULT_ACTIVATED": "УЛЬТИМЕЙТ: {}!",
         "BOSS_HP_TITLE": "⚠ БОСС-ЛОРД ⚠",
         "BOSS_PHASE_2": "⚡ БОСС ВПАЛ В ЯРОСТЬ! ⚡",
@@ -877,16 +879,16 @@ TRANSLATIONS = {
 
         # Hero Ultimates
         "ult_chrono_slide_name": "Chrono Slide",
-        "ult_chrono_slide_desc": "Reset charges + super speed + shockwaves for 4s",
+        "ult_chrono_slide_desc": "Slider gathers the force of time and releases a pulse that scatters nearby foes. Then the hero tears across the arena in a chrono-slide: briefly invulnerable, faster than ever, and trailing kinetic aftershocks.",
 
         "ult_earthquake_slam_name": "Earthquake Slam",
-        "ult_earthquake_slam_desc": "Seismic slam 350 dmg + pull & 3.5s stun",
+        "ult_earthquake_slam_desc": "The Brawler's fist crashes into the arena, splitting the ground with molten fractures. The shockwave hurls enemies away; those it fells are flung through the air as living projectiles. Every body that strikes another foe unleashes a fresh echo of crushing force.",
 
         "ult_chain_lightning_name": "Chain Lightning",
-        "ult_chain_lightning_desc": "12 chain lightnings + electric storm zones",
+        "ult_chain_lightning_desc": "Spark tears open the sky and calls down twelve bolts from an ancient storm god. They pierce the horde and leap from target to target, leaving pulsing storm rifts in the ground. Each rift burns and stuns anything reckless enough to enter its eye.",
 
         "ult_shadow_dance_name": "Shadow Dance",
-        "ult_shadow_dance_desc": "Teleport across 10 enemies with 4x crit + heal",
+        "ult_shadow_dance_desc": "Shadow dissolves into violet smoke, then appears behind the enemy line. Up to ten swift cuts carve through the horde, leaving ghostly trails and stealing life with every strike. The final slash carries the hero to a new point in the fight.",
 
         # Achievements Screen
         "ACH_TITLE": "ACHIEVEMENTS",
@@ -910,6 +912,8 @@ TRANSLATIONS = {
 
         # Ultimate & Boss
         "ULT_READY": "Q / RMB — {}!",
+        "ULT_COOLDOWN": "Ultimate cooldown: {}s",
+        "ULT_CASTING": "Channeling ultimate: {}s",
         "ULT_ACTIVATED": "ULTIMATE: {}!",
         "BOSS_HP_TITLE": "⚠ BOSS LORD ⚠",
         "BOSS_PHASE_2": "⚡ BOSS ENTERED RAGE MODE! ⚡",

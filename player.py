@@ -123,6 +123,9 @@ class Player:
 
         # Ультимейт, щит и статистика
         self.ult_charge = 0.0  # 0.0 - 100.0
+        self.ult_cooldown_timer = 0.0
+        self.ult_cast_timer = 0.0
+        self.ult_cast_duration = 0.0
         self.total_slides_count = 0
         self.shield_hp = 0.0
         self.shield_regen_timer = 0.0
@@ -377,6 +380,11 @@ class Player:
         self.update_tonics(dt)
         self.time_alive += dt
         self.body_anim_timer += dt
+        cast_locked = self.ult_cast_timer > 0
+        self.ult_cast_timer = max(0.0, self.ult_cast_timer - dt)
+        if self.ult_cast_timer < 1e-7:
+            self.ult_cast_timer = 0.0
+        self.ult_cooldown_timer = max(0.0, self.ult_cooldown_timer - dt)
 
         new_max = self.get_max_hp()
         if new_max != self.max_hp:
@@ -496,31 +504,38 @@ class Player:
         if dist > 0:
             self.facing_angle = math.atan2(dy, dx)
 
-        # Скольжение
-        slide_pressed = keys[pygame.K_SPACE] or keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]
+        if cast_locked:
+            # Ultimate wind-up is a committed pose: no walk, slide, dash, or
+            # fist input may move the player until the cast resolves.
+            self.is_sliding = False
+            self.slide_current_speed = 0.0
+            self.velocity_x = self.velocity_y = 0.0
+            self.current_speed = 0.0
+            self.dash_attack_active = False
+            self.fist_attack_active = False
+        else:
+            slide_pressed = keys[pygame.K_SPACE] or keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]
+            if not slide_pressed:
+                if self.is_sliding:
+                    self.stop_slide()
+                self.slide_was_pressed = False
+                self.slide_needs_repress = False
+            else:
+                if not self.slide_was_pressed and not self.slide_needs_repress:
+                    if not self.is_sliding and self.slide_charges > 0:
+                        self.start_slide()
+                    self.slide_was_pressed = True
 
-        if not slide_pressed:
             if self.is_sliding:
-                self.stop_slide()
-            self.slide_was_pressed = False
-            self.slide_needs_repress = False
-        else:
-            if not self.slide_was_pressed and not self.slide_needs_repress:
-                if not self.is_sliding and self.slide_charges > 0:
-                    self.start_slide()
-                self.slide_was_pressed = True
+                self.update_slide(dt, world_mouse_x, world_mouse_y)
+            else:
+                self.update_movement(dt, keys)
 
-        if self.is_sliding:
-            self.update_slide(dt, world_mouse_x, world_mouse_y)
-        else:
-            self.update_movement(dt, keys)
-
-        self.current_speed = math.sqrt(self.velocity_x ** 2 + self.velocity_y ** 2)
+            self.current_speed = math.sqrt(self.velocity_x ** 2 + self.velocity_y ** 2)
+            if not self.dash_attack_active:
+                self.update_fist_attack(dt)
         self.x += self.velocity_x * dt
         self.y += self.velocity_y * dt
-
-        if not self.dash_attack_active:
-            self.update_fist_attack(dt)
 
     def update_movement(self, dt, keys):
         mx, my = 0, 0
@@ -742,6 +757,10 @@ class Player:
 
     # ── Урон ──
     def take_damage(self, damage):
+        # The cinematic cast is a committed, protected animation window; hits
+        # are ignored outright so shields/thorns/status effects are untouched.
+        if self.ult_cast_timer > 0:
+            return 0
         if self.is_invincible():
             return 0
         if rng_module.random() * 100 < self.stats["block_chance"]:
@@ -816,6 +835,25 @@ class Player:
     def draw(self, screen, camera):
         sx, sy = camera.apply(self.x, self.y)
         sx, sy = int(sx), int(sy)
+
+        # Ultimate wind-up: orbiting sigils and a pulsing field telegraph that
+        # grows brighter as the cast approaches its release.
+        if self.ult_cast_timer > 0 and self.ult_cast_duration > 0:
+            progress = 1.0 - self.ult_cast_timer / self.ult_cast_duration
+            pulse = .5 + .5 * math.sin(self.body_anim_timer * 24)
+            radius = self.size + 12 + int(progress * 24)
+            alpha = int(55 + 90 * progress + 35 * pulse)
+            aura = pygame.Surface((radius*2+4, radius*2+4), pygame.SRCALPHA)
+            pygame.draw.circle(aura, (*self.color, min(200, alpha//2)),
+                               (radius+2, radius+2), radius)
+            pygame.draw.circle(aura, (*self.color, min(255, alpha)),
+                               (radius+2, radius+2), radius, 2)
+            screen.blit(aura, (sx-radius-2, sy-radius-2))
+            for i in range(3):
+                angle = -self.body_anim_timer * (2.5+i*.35) + i*math.tau/3
+                orbit = radius + 7 + i*3
+                point = (sx+int(math.cos(angle)*orbit), sy+int(math.sin(angle)*orbit))
+                pygame.draw.circle(screen, WHITE, point, 2+i%2)
 
         # Level-up кольца
         for ring_r, ring_lt, ring_mlt in self.level_up_rings:
@@ -1059,71 +1097,35 @@ class Player:
             screen.blit(tw_s, (sx - tw_r, sy - tw_r))
 
     def gain_ult_charge(self, amount):
-        self.ult_charge = min(100.0, self.ult_charge + amount)
+        # Ultimates now require twice as many kills/charge upgrades to refill.
+        # Cast lock and the post-cast cooldown are hard gates: charge cannot
+        # trickle in while the cooldown is visible.
+        if self.ult_cooldown_timer > 0 or self.ult_cast_timer > 0:
+            return
+        self.ult_charge = min(100.0, self.ult_charge + amount * 0.5)
 
     def can_use_ult(self):
-        return self.ult_charge >= 100.0
+        return (self.ult_charge >= 100.0 and self.ult_cooldown_timer <= 0
+                and self.ult_cast_timer <= 0)
 
-    def trigger_hero_ult(self, hero_id, enemies, camera, particle_manager):
-        """Запуск уникальной ультимативной способности героя"""
-        if not self.can_use_ult():
-            return False
-
-        self.ult_charge = 0.0
-        from heroes import HEROES
-        from translations import t
-
-        hero_info = HEROES.get(hero_id, HEROES["slider"])
-        ult_id = hero_info["ult_id"]
-        ult_name = t(f"{ult_id}_name")
-
-        particle_manager.add_message(t("ULT_ACTIVATED", ult_name), GOLD)
-
+    def resolve_hero_ult(self, hero_id, camera, particle_manager):
+        """Apply the caster-specific buffs/impact VFX after its wind-up."""
         if hero_id == "slider":
-            # Хроно-Рывок
             self.slide_charges = self.slide_max_charges
-            self.invincible_timer = 4.0
-            self.speed_boost_timer = 4.0
-            self.speed_boost_multiplier = 2.0
-            camera.add_shake(12)
-            particle_manager.spawn_bomb_particles(self.x, self.y, count=50)
-
+            self.invincible_timer = 3.4
+            self.speed_boost_timer = 3.6
+            self.speed_boost_multiplier = 2.35
+            camera.add_shake(15, .55)
+            particle_manager.spawn_bomb_particles(self.x, self.y, count=90)
         elif hero_id == "brawler":
-            # Дрожь Земли
-            camera.add_shake(20)
-            particle_manager.spawn_bomb_particles(self.x, self.y, count=80)
-            for enemy in enemies:
-                if enemy.alive and camera.is_visible(enemy.x, enemy.y, margin=150):
-                    enemy.take_damage(350)
-                    enemy.stun_timer = 3.5
-                    dx = self.x - enemy.x
-                    dy = self.y - enemy.y
-                    dist = max(1.0, math.sqrt(dx * dx + dy * dy))
-                    enemy.apply_knockback((dx / dist) * 400, (dy / dist) * 400)
-
+            camera.add_shake(24, .8)
+            particle_manager.spawn_bomb_particles(self.x, self.y, count=120)
         elif hero_id == "spark":
-            # Цепной Шторм
-            camera.add_shake(12)
-            particle_manager.spawn_level_up_particles(self.x, self.y, count=60)
-            for i in range(12):
-                angle = i * (math.pi * 2 / 12)
-                for r in [60, 120, 180]:
-                    tx = self.x + math.cos(angle) * r
-                    ty = self.y + math.sin(angle) * r
-                    self.electric_trails.append((tx, ty, ELECTRIC_TRAIL_RADIUS * 1.5, 3.0))
-
+            camera.add_shake(16, .6)
+            particle_manager.spawn_level_up_particles(self.x, self.y, count=100)
         elif hero_id == "shadow":
-            # Танец Теней
-            camera.add_shake(15)
-            self.invincible_timer = 3.0
-            self.heal(self.max_hp * 0.25)
-            count = 0
-            for enemy in enemies:
-                if enemy.alive and camera.is_visible(enemy.x, enemy.y, margin=200):
-                    enemy.take_damage(self.get_fist_damage() * 4.0)
-                    particle_manager.spawn_death_particles(enemy.x, enemy.y, PURPLE, count=15)
-                    count += 1
-                    if count >= 10:
-                        break
-
+            camera.add_shake(13, .45)
+            self.invincible_timer = 2.5
+            self.heal(self.max_hp * .35)
+            particle_manager.spawn_death_particles(self.x, self.y, PURPLE, count=70)
         return True

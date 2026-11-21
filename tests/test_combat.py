@@ -122,7 +122,7 @@ class CombatTests(unittest.TestCase):
                     self.assertIn(f'upgrade_{key}_{suffix}', strings)
         self.game.on_enemy_killed(Enemy(0, 0, 'ghoul'))
         self.assertEqual(self.player.combo_timer, COMBO_TIMEOUT + 0.75)
-        self.assertEqual(self.player.ult_charge, 4)
+        self.assertEqual(self.player.ult_charge, 2)  # charge is intentionally 2x slower
         self.game.apply_item_effect('speed_boost')
         self.assertEqual(self.player.speed_boost_timer, SPEED_BOOST_DURATION + 2)
         self.player.take_damage(20)

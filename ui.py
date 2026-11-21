@@ -24,6 +24,17 @@ _THEME_COLORS = {
     'cyan': (63, 211, 229), 'red': (244, 89, 107), 'yellow': (247, 207, 78),
     'purple': (178, 113, 255), 'green': (91, 220, 158), 'orange': (255, 151, 75),
 }
+_HERO_PALETTES = {
+    # Softer teal: less saturated blue than the original slider accent.
+    'slider': {'INK': (15, 27, 34), 'PANEL': (23, 39, 47), 'EDGE': (57, 87, 92),
+               'MUTED': (153, 184, 183), 'PAPER': (229, 239, 235), 'MINT': (90, 185, 181)},
+    # Gruvbox Dark (hard-coded palette family).
+    'spark': {'INK': (40, 40, 40), 'PANEL': (60, 56, 54), 'EDGE': (102, 92, 84),
+              'MUTED': (189, 174, 147), 'PAPER': (235, 219, 178), 'MINT': (250, 189, 47)},
+    # Catppuccin Mocha with a violet/lavender accent.
+    'shadow': {'INK': (30, 30, 46), 'PANEL': (49, 50, 68), 'EDGE': (88, 91, 112),
+               'MUTED': (166, 173, 200), 'PAPER': (205, 214, 244), 'MINT': (203, 166, 247)},
+}
 
 
 def _mix(a, b, amount):
@@ -54,6 +65,16 @@ def language_rect(i):
 
 def settings_rect(i):
     return pygame.Rect(70, 177 + 53*i, 1140, 47)
+
+
+def settings_value_left_rect(i):
+    row = settings_rect(i)
+    return pygame.Rect(row.right-238, row.y+6, 34, row.h-12)
+
+
+def settings_value_right_rect(i):
+    row = settings_rect(i)
+    return pygame.Rect(row.right-54, row.y+6, 34, row.h-12)
 
 
 def settings_tab_rect(i):
@@ -133,22 +154,36 @@ class UI:
         return settings.get(key, DEFAULTS.get(key)) if settings else DEFAULTS.get(key)
 
     def apply_theme(self, selected_hero_index=0, theme='hero'):
-        """Apply the live accent and tinted surfaces to every menu/UI screen."""
-        global INK, PANEL, EDGE, MUTED, MINT, PAPER, CYAN, GOLD
-        if theme == 'hero':
-            theme = HERO_KEYS[selected_hero_index % len(HERO_KEYS)]
-            accent = HEROES[theme]['color']
+        """Apply the chosen palette to menu screens, HUD, and shared UI effects."""
+        global INK, PANEL, EDGE, MUTED, MINT, PAPER, CYAN, GOLD, YELLOW, ORANGE, PURPLE, TEAL
+        global DARK_BLUE, DARK_GRAY, GRAY, LIGHT_GRAY
+        hero_theme = theme == 'hero'
+        if hero_theme:
+            hero_id = HERO_KEYS[selected_hero_index % len(HERO_KEYS)]
+            accent = HEROES[hero_id]['color']
+            palette = _HERO_PALETTES.get(hero_id)
         else:
+            hero_id = None
             accent = _THEME_COLORS.get(theme, _THEME_COLORS['cyan'])
-        # Tinted dark surfaces keep readable contrast while making the entire
-        # interface (including menu backdrop and modal screens) feel cohesive.
-        INK = _mix((12, 18, 29), accent, .12)
-        PANEL = _mix((23, 34, 50), accent, .16)
-        EDGE = _mix((54, 73, 91), accent, .48)
-        MUTED = _mix((159, 180, 194), accent, .38)
-        MINT = accent
-        PAPER = _mix((233, 242, 246), accent, .12)
-        CYAN = GOLD = accent
+            palette = None
+        if palette:
+            INK, PANEL, EDGE = palette['INK'], palette['PANEL'], palette['EDGE']
+            MUTED, PAPER, MINT = palette['MUTED'], palette['PAPER'], palette['MINT']
+            accent = MINT
+        else:
+            # Tinted dark surfaces retain readable contrast for custom themes
+            # and the Brawler's original crimson palette.
+            INK = _mix((12, 18, 29), accent, .12)
+            PANEL = _mix((23, 34, 50), accent, .16)
+            EDGE = _mix((54, 73, 91), accent, .48)
+            MUTED = _mix((159, 180, 194), accent, .38)
+            PAPER = _mix((233, 242, 246), accent, .12)
+            MINT = accent
+        CYAN = GOLD = YELLOW = ORANGE = PURPLE = TEAL = accent
+        DARK_BLUE = _mix(INK, accent, .35)
+        DARK_GRAY = _mix(PANEL, accent, .14)
+        GRAY = EDGE
+        LIGHT_GRAY = MUTED
         # Bestiary caches its imported palette, so refresh those bindings too.
         import sys
         guide = sys.modules.get('bestiary')
@@ -156,6 +191,11 @@ class UI:
             for name in ('INK', 'PANEL', 'EDGE', 'MUTED', 'MINT', 'PAPER'):
                 setattr(guide, name, globals()[name])
         self.theme_accent = accent
+        self.theme_palette = {'accent': MINT, 'panel': PANEL, 'edge': EDGE, 'text': PAPER}
+        game = getattr(self, 'game', None)
+        manager = getattr(game, 'particle_manager', None)
+        if manager is not None:
+            manager.theme_palette = self.theme_palette
 
     def fitted_text(self, text, color, width, height, max_size=14):
         # Measure rendered glyphs, not the nominal point size (Cyrillic/descenders).
@@ -313,7 +353,7 @@ class UI:
         bar_x = UI_MARGIN
         bar_y = UI_MARGIN + UI_HP_BAR_HEIGHT + 65
 
-        ratio = player.ult_charge / 100.0
+        ratio = 0.0 if player.ult_cooldown_timer > 0 or player.ult_cast_timer > 0 else player.ult_charge / 100.0
         bg_rect = pygame.Rect(bar_x, bar_y, bar_w, bar_h)
         pygame.draw.rect(screen, DARK_GRAY, bg_rect)
 
@@ -321,7 +361,7 @@ class UI:
         fill_rect = pygame.Rect(bar_x, bar_y, fill_w, bar_h)
         fill_color = GOLD if player.can_use_ult() else YELLOW
         pygame.draw.rect(screen, fill_color, fill_rect)
-        pygame.draw.rect(screen, WHITE if player.can_use_ult() else GRAY, bg_rect, 2)
+        pygame.draw.rect(screen, PAPER if player.can_use_ult() else EDGE, bg_rect, 2)
 
         from heroes import HEROES
         hero_id = getattr(player, 'hero_id', 'slider')
@@ -329,15 +369,22 @@ class UI:
         ult_id = hero_info["ult_id"]
         ult_name = t(f"{ult_id}_name")
 
-        if player.can_use_ult():
-            t_str = t("ULT_READY", ult_name)
-            text_s = self.fitted_text(t_str, GOLD, 230, 17, 14)
-            screen.blit(text_s, (bar_x, bar_y + 20))
+        if player.ult_cooldown_timer > 0:
+            message = t('ULT_COOLDOWN', math.ceil(player.ult_cooldown_timer))
+            color = MUTED
+        elif player.ult_cast_timer > 0:
+            message = t('ULT_CASTING', max(1, math.ceil(player.ult_cast_timer)))
+            color = MINT
+        elif player.can_use_ult():
+            message = t("ULT_READY", ult_name)
+            color = GOLD
         else:
-            pct_str = f"{ult_name}: {int(player.ult_charge)}%"
-            text_s = self.fitted_text(pct_str, LIGHT_GRAY, bar_w-8, bar_h-4, 13)
-            text_r = text_s.get_rect(center=bg_rect.center)
-            screen.blit(text_s, text_r)
+            message = f"{ult_name}: {int(player.ult_charge)}%"
+            color = LIGHT_GRAY
+        text_s = self.fitted_text(message, color, 230 if player.can_use_ult() else bar_w-8,
+                                  17 if player.can_use_ult() or player.ult_cooldown_timer else bar_h-4, 14)
+        text_r = text_s.get_rect(midleft=(bar_x, bar_y+28)) if player.can_use_ult() or player.ult_cooldown_timer else text_s.get_rect(center=bg_rect.center)
+        screen.blit(text_s, text_r)
 
     def draw_boss_bar(self, screen, boss):
         if not boss or not boss.alive:
@@ -411,7 +458,7 @@ class UI:
         if not self.setting('hud_stats'):
             return
         x, y = SCREEN_WIDTH-274, UI_MARGIN
-        stats = [('KILLS', player.enemies_killed, MINT), ('ENEMIES', enemy_count, (255, 145, 123)),
+        stats = [('KILLS', player.enemies_killed, MINT), ('ENEMIES', enemy_count, MINT),
                  ('SPEED', int(player.current_speed), CYAN), ('COMBO', player.combo_max_reached, GOLD)]
         for i, (label, value, accent) in enumerate(stats):
             rect = pygame.Rect(x+(i%2)*132, y+(i//2)*51, 126, 45)
@@ -436,7 +483,7 @@ class UI:
         mm_surface = pygame.Surface((mm_size, mm_size), pygame.SRCALPHA)
 
         # Тёмный прозрачный круговой фон
-        pygame.draw.circle(mm_surface, (12, 16, 32, 210), (center, center), radius)
+        pygame.draw.circle(mm_surface, (*INK, 220), (center, center), radius)
 
         if world is not None:
             biome = world.biome_at(player.x, player.y)
@@ -447,12 +494,12 @@ class UI:
             screen.blit(self._biome_label, self._biome_label.get_rect(midbottom=(mm_x+center, mm_y-4)))
 
         # Радарная сетка (концентрические круги)
-        pygame.draw.circle(mm_surface, (0, 220, 255, 45), (center, center), int(radius * 0.66), 1)
-        pygame.draw.circle(mm_surface, (0, 220, 255, 25), (center, center), int(radius * 0.33), 1)
+        pygame.draw.circle(mm_surface, (*MINT, 45), (center, center), int(radius * 0.66), 1)
+        pygame.draw.circle(mm_surface, (*MINT, 25), (center, center), int(radius * 0.33), 1)
 
         # Перекрестие (север-юг-запад-восток)
-        pygame.draw.line(mm_surface, (0, 220, 255, 40), (center, 6), (center, mm_size - 6), 1)
-        pygame.draw.line(mm_surface, (0, 220, 255, 40), (6, center), (mm_size - 6, center), 1)
+        pygame.draw.line(mm_surface, (*MINT, 40), (center, 6), (center, mm_size - 6), 1)
+        pygame.draw.line(mm_surface, (*MINT, 40), (6, center), (mm_size - 6, center), 1)
 
         # Вращающийся луч радара
         t_time = game_time
@@ -460,7 +507,7 @@ class UI:
         end_x = center + int(math.cos(sweep_angle) * radius)
         end_y = center + int(math.sin(sweep_angle) * radius)
         if self.setting("radar_sweep"):
-            pygame.draw.line(mm_surface, (0, 255, 220, 70), (center, center), (end_x, end_y), 2)
+            pygame.draw.line(mm_surface, (*MINT, 70), (center, center), (end_x, end_y), 2)
 
         # Опыт (XP gems)
         for orb in (xp_orbs if self.setting("minimap_pickups") else ()):
@@ -516,10 +563,10 @@ class UI:
         p_right_x = center + int(math.cos(p_angle - 2.4) * 5)
         p_right_y = center + int(math.sin(p_angle - 2.4) * 5)
         pygame.draw.polygon(mm_surface, CYAN, [(p_front_x, p_front_y), (p_left_x, p_left_y), (p_right_x, p_right_y)])
-        pygame.draw.polygon(mm_surface, WHITE, [(p_front_x, p_front_y), (p_left_x, p_left_y), (p_right_x, p_right_y)], 1)
+        pygame.draw.polygon(mm_surface, PAPER, [(p_front_x, p_front_y), (p_left_x, p_left_y), (p_right_x, p_right_y)], 1)
 
         # Внешнее неоновое кольцо радара
-        pygame.draw.circle(mm_surface, (0, 220, 255), (center, center), radius, 2)
+        pygame.draw.circle(mm_surface, MINT, (center, center), radius, 2)
 
         screen.blit(mm_surface, (mm_x, mm_y))
 
@@ -704,8 +751,13 @@ class UI:
                 text = f'{value:g}×'
             else:
                 text = str(value)
-            label = self.body.render('‹  '+text+'  ›', True, MINT if selected else MUTED)
-            screen.blit(label, label.get_rect(midright=(rect.right-20, rect.centery)))
+            value_color = MINT if selected else MUTED
+            label = self.fitted_text(text, value_color, 164, rect.h-8, 19)
+            screen.blit(label, label.get_rect(center=(rect.right-140, rect.centery)))
+            left_arrow = self.body.render('‹', True, value_color)
+            right_arrow = self.body.render('›', True, value_color)
+            screen.blit(left_arrow, left_arrow.get_rect(center=settings_value_left_rect(i).center))
+            screen.blit(right_arrow, right_arrow.get_rect(center=settings_value_right_rect(i).center))
         hint = self.body.render(t('SETTINGS_TABS_HINT'), True, MUTED)
         screen.blit(hint, (70, 674))
         note = self.font_small.render(t('SETTINGS_NOTE'), True, MUTED)
@@ -805,16 +857,21 @@ class UI:
         screen.fill(INK)
         key = HERO_KEYS[selected_hero_index]
         hero = HEROES[key]
-        accent = hero['color']
+        accent = self.theme_accent
         # Scrolling lanes and little packets of light behind the stationary UI.
         seconds = pygame.time.get_ticks() / 1000
         drift = int(seconds * 18) % 68
         for lane in range(-7, SCREEN_WIDTH // 68 + 1):
             x = lane * 68 + drift
             pygame.draw.line(screen, _mix(INK, self.theme_accent, .10), (x, SCREEN_HEIGHT), (x+350, 0), 1)
-            progress = (seconds * 0.24 + lane * 0.618) % 1
+            phase = seconds * 0.24 + lane * 0.618
+            progress = phase % 1
             head = (int(x + progress * 350), int((1-progress) * SCREEN_HEIGHT))
-            pygame.draw.line(screen, _mix(EDGE, self.theme_accent, .42), head, (head[0]-13, head[1]+27), 2)
+            # Fade packets in/out across the loop boundary instead of making
+            # their upward streaks pop out abruptly at the top of the lane.
+            fade = min(1.0, progress * 6.0, (1.0-progress) * 6.0)
+            streak = _mix(INK, self.theme_accent, .58 * fade)
+            pygame.draw.line(screen, streak, head, (head[0]-13, head[1]+27), 2)
         screen.blit(self.mono.render('SS  /  ' + t('LOBBY'), True, MINT), (70, 40))
         guide_button = bestiary_rect()
         pygame.draw.rect(screen, PANEL, guide_button, border_radius=7)
@@ -846,7 +903,8 @@ class UI:
             delta = (selected_hero_index - self._lobby_hero) % len(HERO_KEYS)
             self._hero_direction = 1 if delta == 1 else -1
             self._hero_started = now
-            self._hero_old = getattr(self, '_hero_card', None)
+            previous_card = getattr(self, '_hero_card', None)
+            self._hero_old = previous_card.copy() if previous_card is not None else None
         self._lobby_hero = selected_hero_index
         # Hero emblem with a contrail, orbit ticks and the fighter's own colours.
         cx, cy = card.centerx, 329
@@ -878,13 +936,15 @@ class UI:
             clip = screen.get_clip()
             screen.set_clip(content_rect)
             if old is not None:
-                old.set_alpha(round(255*(1-eased)))
-                screen.blit(old, (content_rect.x-round(direction*90*eased), content_rect.y))
-            current.set_alpha(round(255*eased))
-            screen.blit(current, (content_rect.x+round(direction*90*(1-eased)), content_rect.y))
+                old_frame = old.copy()
+                old_frame.set_alpha(round(255*(1-eased)))
+                screen.blit(old_frame, (content_rect.x-round(direction*90*eased), content_rect.y))
+            current_frame = current.copy()
+            current_frame.set_alpha(round(255*eased))
+            screen.blit(current_frame, (content_rect.x+round(direction*90*(1-eased)), content_rect.y))
             screen.set_clip(clip)
         current.set_alpha(255)
-        self._hero_card = current
+        self._hero_card = current.copy()
         # Arrows are drawn last so the hero transition can never move them.
         for step in (-1, 1):
             button = hero_arrow_rect(step)
