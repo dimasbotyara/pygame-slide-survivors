@@ -967,7 +967,9 @@ class Player:
             aex = ax + int(math.cos(self.facing_angle) * arm_len)
             aey = ay + int(math.sin(self.facing_angle) * arm_len)
 
-            ac = color
+            # Distinct equipment is cosmetic; combat reach and damage stay unchanged.
+            ac = {'slider': (85, 225, 235), 'brawler': (230, 83, 70),
+                  'spark': (255, 210, 67), 'shadow': (190, 142, 244)}[self.hero_id]
             if self.fist_attack_active:
                 if self.fist_which_hand == 2 or self.fist_which_hand == i:
                     ac = ORANGE if self.fist_is_mega else YELLOW
@@ -978,7 +980,18 @@ class Player:
                 pygame.draw.circle(screen, CYAN, (aex, aey), 8, 2)
                 ac = WHITE
             pygame.draw.line(screen, ac, (ax, ay), (aex, aey), 4)
-            pygame.draw.circle(screen, ac, (aex, aey), 5 if (self.fist_attack_active and (self.fist_which_hand == 2 or self.fist_which_hand == i)) else 3)
+            if self.hero_id in ('shadow', 'spark'):
+                # Shadow carries paired blades; Spark has electric batons.
+                length = 16 if self.hero_id == 'shadow' else 12
+                dx, dy = math.cos(self.facing_angle), math.sin(self.facing_angle)
+                tip = (int(aex + dx * length), int(aey + dy * length))
+                pygame.draw.line(screen, (36, 28, 50), (aex, aey), tip, 6)
+                pygame.draw.line(screen, ac, (aex, aey), tip, 4)
+                pygame.draw.line(screen, WHITE, (aex, aey), tip, 1)
+            else:
+                radius = 6 if self.hero_id == 'brawler' else 4
+                pygame.draw.circle(screen, ac, (aex, aey), radius)
+                pygame.draw.circle(screen, WHITE, (aex, aey), radius, 1)
 
         # Глаза
         for side in [-1, 1]:

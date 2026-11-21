@@ -414,21 +414,21 @@ class Enemy:
         pygame.draw.line(screen, YELLOW, (sx + 6, sy - 5), (sx + 2, sy - 2), 2)
 
     def _draw_ghost(self, screen, sx, sy, color):
-        points = [(sx - self.size, sy)]
-        points.append((sx - self.size, sy - self.size))
-        points.append((sx, sy - self.size - 4))
-        points.append((sx + self.size, sy - self.size))
-        points.append((sx + self.size, sy))
-        wave_count = 3
-        for i in range(wave_count * 2 + 1):
-            wx = sx + self.size - (i * self.size * 2) / (wave_count * 2)
-            wy = sy + math.sin(self.anim_timer * 4 + i) * 4
-            points.append((int(wx), int(wy)))
-        if len(points) >= 3:
-            pygame.draw.polygon(screen, color, points)
-            pygame.draw.polygon(screen, self.outline_color, points, 2)
-        pygame.draw.circle(screen, BLACK, (sx - 4, sy - 5), 3)
-        pygame.draw.circle(screen, BLACK, (sx + 4, sy - 5), 3)
+        # A floating rounded spirit with a rippling, translucent-looking hem.
+        bob = int(math.sin(self.anim_timer * 3) * 2)
+        sy += bob
+        points = [(sx-12, sy+8), (sx-12, sy-3), (sx-10, sy-9),
+                  (sx-6, sy-13), (sx, sy-15), (sx+6, sy-13),
+                  (sx+10, sy-9), (sx+12, sy-3), (sx+12, sy+8)]
+        for i in range(7):
+            points.append((sx+12-i*4, sy+8 + int(math.sin(self.anim_timer*4+i)*2) - (3 if i%2 else 0)))
+        pygame.draw.polygon(screen, (83, 145, 163), points)
+        inner = [(sx+(x-sx)*.8, sy+(y-sy)*.8-1) for x,y in points]
+        pygame.draw.polygon(screen, (235, 255, 255) if self.flash_timer else (171, 224, 229), inner)
+        pygame.draw.arc(screen, (239, 255, 255), (sx-8, sy-11, 13, 10), .4, 2.7, 2)
+        for x in (-4, 4):
+            pygame.draw.ellipse(screen, (35, 64, 84), (sx+x-2, sy-4, 4, 6))
+            pygame.draw.circle(screen, WHITE, (sx+x-1, sy-3), 1)
 
     def _draw_shooter(self, screen, sx, sy, color):
         rect = pygame.Rect(sx - self.size, sy - self.size, self.size * 2, self.size * 2)
@@ -612,35 +612,26 @@ class Boss(Enemy):
         pygame.draw.circle(aura_s, (150, 0, 200, 30), (aura_r, aura_r), aura_r)
         screen.blit(aura_s, (sx - aura_r, sy - aura_r))
 
-        # Тело
-        pygame.draw.circle(screen, color, (sx, sy), self.size)
-
-        # Корона
-        crown_base_y = sy - self.size + 5
-        crown_width = self.size
-        crown_height = 18
-        spikes = 5
-        crown_points = [(sx - crown_width, crown_base_y)]
-        for i in range(spikes * 2 + 1):
-            cx = sx - crown_width + (i * crown_width * 2) / (spikes * 2)
-            cy = crown_base_y if i % 2 == 0 else crown_base_y - crown_height
-            crown_points.append((int(cx), int(cy)))
-        crown_points.append((sx + crown_width, crown_base_y))
-        if len(crown_points) >= 3:
-            pygame.draw.polygon(screen, GOLD, crown_points)
-            pygame.draw.polygon(screen, ORANGE, crown_points, 2)
-
-        # Обводка
-        pygame.draw.circle(screen, self.outline_color, (sx, sy), self.size, 3)
-
-        # Глаза
-        for ex in [-12, 12]:
-            pygame.draw.circle(screen, RED, (sx + ex, sy - 8), 7)
-            pygame.draw.circle(screen, (255, 0, 0), (sx + ex, sy - 8), 4)
-            pygame.draw.circle(screen, BLACK, (sx + ex, sy - 8), 2)
-
-        # Рот
-        pygame.draw.arc(screen, BLACK, (sx - 15, sy + 2, 30, 20), math.pi, 2 * math.pi, 3)
+        # Armoured void sentinel: horns, layered plates and a glowing core.
+        dark = (35, 24, 51)
+        armor = (110, 67, 137) if not self.is_enraged else (150, 50, 73)
+        glow = (98, 235, 229) if not self.is_enraged else (255, 157, 70)
+        if self.flash_timer > 0:
+            armor = WHITE
+        pygame.draw.polygon(screen, dark, [(sx-32,sy-24),(sx-48,sy-56),(sx-39,sy-8),
+                                          (sx+39,sy-8),(sx+48,sy-56),(sx+32,sy-24)])
+        pygame.draw.polygon(screen, armor, [(sx-38,sy-22),(sx-27,sy-39),(sx,sy-45),
+                                           (sx+27,sy-39),(sx+38,sy-22),(sx+34,sy+25),
+                                           (sx,sy+44),(sx-34,sy+25)])
+        pygame.draw.polygon(screen, dark, [(sx-38,sy-22),(sx-27,sy-39),(sx,sy-45),
+                                          (sx+27,sy-39),(sx+38,sy-22),(sx+34,sy+25),
+                                          (sx,sy+44),(sx-34,sy+25)], 3)
+        pygame.draw.polygon(screen, (60, 43, 81), [(sx-29,sy-17),(sx,sy-30),(sx+29,sy-17),
+                                                  (sx+24,sy+13),(sx,sy+29),(sx-24,sy+13)])
+        pygame.draw.polygon(screen, glow, [(sx-23,sy-10),(sx-7,sy-5),(sx-12,sy+1),(sx-24,sy-3)])
+        pygame.draw.polygon(screen, glow, [(sx+23,sy-10),(sx+7,sy-5),(sx+12,sy+1),(sx+24,sy-3)])
+        pygame.draw.polygon(screen, dark, [(sx,sy+5),(sx+11,sy+16),(sx,sy+28),(sx-11,sy+16)])
+        pygame.draw.polygon(screen, glow, [(sx,sy+9),(sx+7,sy+16),(sx,sy+23),(sx-7,sy+16)])
 
         # HP бар
         bar_w = self.size * 3

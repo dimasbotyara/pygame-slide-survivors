@@ -2,6 +2,12 @@
 
 TRANSLATIONS = {
     "ru": {
+        'RESET_BUTTON': 'Закрыть игру, удалить сохранения и конфиги',
+        'RESET_WARNING': 'Удалить рекорды, достижения и настройки и закрыть игру? Это нельзя отменить!',
+        'RESET_CONFIRM': 'Удалить и выйти',
+        'RESET_CANCEL': 'Отмена',
+        'RESET_ERROR': 'Не удалось удалить файлы. Проверьте права доступа.',
+
         'GUIDE_BUTTON': 'Бестиарий  [B / 8]',
         'GUIDE_TITLE': 'БЕСТИАРИЙ',
         'GUIDE_BACK': 'Esc · Назад',
@@ -9,6 +15,8 @@ TRANSLATIONS = {
         'GUIDE_FILTER_regular': 'Обычные',
         'GUIDE_FILTER_resident': 'Обитатели',
         'GUIDE_FILTER_boss': 'Боссы',
+        'GUIDE_FILTER_tonics': 'Тоники',
+        'GUIDE_FILTER_pickups': 'Предметы',
         'GUIDE_TAB_enemies': 'Враги',
         'GUIDE_TAB_temporary': 'Временные',
         'GUIDE_TAB_permanent': 'Постоянные',
@@ -66,7 +74,7 @@ TRANSLATIONS = {
         'GUIDE_RESIST': 'Сопротивление отбрасыванию: {}%',
         'GUIDE_NATIVE_RULE': 'За границей родного биома погибает без награды: нет опыта, убийства, комбо, тела и предметов.',
         'GUIDE_BASE_NOTE': 'База ×1, до брони игрока. HP и урон обычных атак растут со сложностью; взрыв указан отдельно.',
-        'GUIDE_HINT': '1–5 / Tab: вкладки   F: фильтр (враги)   ↑↓ / колесо: запись   ←→ / PgUp/PgDn: страница   Home/End   Esc: назад',
+        'GUIDE_HINT': '1–5 / Tab: вкладки   F: фильтр   ↑↓ / колесо: запись   ←→ / PgUp/PgDn: страница   Home/End   Esc: назад',
         'GUIDE_BEHAVIOR_zombie': 'Преследует по прямой и бьёт вблизи после заполнения кольца. Отступи за радиус или скользни за край при белой вспышке, чтобы зарядить ответный удар.',
         'GUIDE_BEHAVIOR_skirmisher': 'Быстро сближается зигзагами, затем наносит ближний удар с предупреждением. Не целься только в текущую позицию: отойди от кольца и встречай его на подходе.',
         'GUIDE_BEHAVIOR_crusher': 'Медленно подходит и готовит удар по большой площади. Следи за широким кольцом, выходи за него до удара; отбрасывается хуже лёгких врагов.',
@@ -601,6 +609,12 @@ TRANSLATIONS = {
         "MSG_BOSS_SPAWNED": "⚠ БОСС ПОЯВИЛСЯ! ⚠",
     },
     "en": {
+        'RESET_BUTTON': 'Quit game and delete saves and settings',
+        'RESET_WARNING': 'Delete high scores, achievements and settings and quit? This cannot be undone!',
+        'RESET_CONFIRM': 'Delete and quit',
+        'RESET_CANCEL': 'Cancel',
+        'RESET_ERROR': 'Could not delete files. Check file permissions.',
+
         'GUIDE_BUTTON': 'Bestiary  [B / 8]',
         'GUIDE_TITLE': 'BESTIARY',
         'GUIDE_BACK': 'Esc · Back',
@@ -608,6 +622,8 @@ TRANSLATIONS = {
         'GUIDE_FILTER_regular': 'Regular',
         'GUIDE_FILTER_resident': 'Residents',
         'GUIDE_FILTER_boss': 'Bosses',
+        'GUIDE_FILTER_tonics': 'Tonics',
+        'GUIDE_FILTER_pickups': 'Pickups',
         'GUIDE_TAB_enemies': 'Enemies',
         'GUIDE_TAB_temporary': 'Temporary',
         'GUIDE_TAB_permanent': 'Permanent',
@@ -665,7 +681,7 @@ TRANSLATIONS = {
         'GUIDE_RESIST': 'Knockback resistance: {}%',
         'GUIDE_NATIVE_RULE': 'Dies outside its home biome without rewards: no XP, kill credit, combo, corpse or items.',
         'GUIDE_BASE_NOTE': 'Base ×1, before player armour. HP and normal attack damage scale with difficulty; blasts are separate.',
-        'GUIDE_HINT': '1–5 / Tab: tabs   F: filter (enemies)   ↑↓ / wheel: entry   ←→ / PgUp/PgDn: page   Home/End   Esc: back',
+        'GUIDE_HINT': '1–5 / Tab: tabs   F: filter   ↑↓ / wheel: entry   ←→ / PgUp/PgDn: page   Home/End   Esc: back',
         'GUIDE_BEHAVIOR_zombie': 'Chases in a straight line and strikes up close after its warning ring fills. Leave the attack radius, or slide across its edge on the white flash to charge a counterattack.',
         'GUIDE_BEHAVIOR_skirmisher': 'Weaves quickly towards you, then winds up a melee strike. Do not aim only at its current position: leave the warning ring and intercept its approach.',
         'GUIDE_BEHAVIOR_crusher': 'Approaches slowly and winds up a wide-area melee strike. Watch the large ring and leave it before impact. It resists knockback better than light enemies.',

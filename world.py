@@ -17,14 +17,14 @@ class Decoration:
         self.anim_offset = rng.random() * 10
         self.size = rng.uniform(0.8, 1.2)
 
-        self.sprite = (prop_sprite(deco_type, biome.ink, rng.choice((2, 2, 3)), rng.choice((True, False)))
+        self.sprite = (prop_sprite(deco_type, biome.ink, rng.choice((3, 3, 4)), rng.choice((True, False)))
                        if deco_type in biome.props else None)
 
     def draw(self, screen, camera, game_time):
         sx, sy = camera.apply(self.x, self.y)
         sx, sy = int(sx), int(sy)
 
-        if getattr(camera, "culling_enabled", True) and (sx < -30 or sx > SCREEN_WIDTH + 30 or sy < -30 or sy > SCREEN_HEIGHT + 30):
+        if getattr(camera, "culling_enabled", True) and (sx < -50 or sx > SCREEN_WIDTH + 50 or sy < -50 or sy > SCREEN_HEIGHT + 50):
             return
 
         if self.sprite is not None:
@@ -227,7 +227,7 @@ class World:
         if key not in self.decoration_cache:
             rng = random.Random(hash((self.seed, cx, cy)))
             decos = []
-            for _ in range(rng.randint(14, 22)):
+            for _ in range(rng.randint(28, 38)):
                 dx, dy = rng.randrange(self.chunk_size), rng.randrange(self.chunk_size)
                 biome = self.biome_at(cx*self.chunk_size + dx, cy*self.chunk_size + dy)
                 kind = rng.choice(biome.props if rng.random() < 0.65 else biome.scatter)

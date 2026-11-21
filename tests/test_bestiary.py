@@ -117,10 +117,10 @@ class BestiaryTests(unittest.TestCase):
         self.assertEqual(b.tab, 0)
         b.handle([press(pygame.K_KP2)])
         self.assertEqual(b.tab, 1)
-        # The filter button does nothing outside the enemies tab.
+        # Filters also work outside the enemies tab.
         before = b.filter
         b.handle([press(pygame.K_f)])
-        self.assertEqual(b.filter, before)
+        self.assertNotEqual(b.filter, before)
 
     def test_stats_follow_actual_game_objects_and_resident_overrides(self):
         for key in ENTRY_KEYS:

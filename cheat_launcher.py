@@ -1595,5 +1595,8 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="Slide Survivors Trainer")
     parser.add_argument('--seed', type=int)
-    game = _game_main.Game(world_seed=parser.parse_args().seed)
-    game.run()
+    try:
+        game = _game_main.Game(world_seed=parser.parse_args().seed)
+        game.run()
+    except KeyboardInterrupt:
+        pygame.quit()

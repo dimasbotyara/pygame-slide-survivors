@@ -1,4 +1,4 @@
-"""Resizable physical window with a fixed logical canvas and mapped input."""
+"""Fixed-size physical window with a fixed logical canvas and mapped input."""
 import pygame
 from settings import SCREEN_WIDTH, SCREEN_HEIGHT
 
@@ -17,12 +17,12 @@ class DisplayManager:
             size = desktops[0] if desktops else (1280, 720)
         fullscreen = self.settings.get('fullscreen')
         try:
-            self.window = pygame.display.set_mode(size, pygame.FULLSCREEN if fullscreen else pygame.RESIZABLE)
+            self.window = pygame.display.set_mode(size, pygame.FULLSCREEN if fullscreen else 0)
             self.error = False
         except pygame.error:
             # Unsupported modes must not leave the player with an unusable window.
             self.settings.settings.update(fullscreen=False, resolution=(1280, 720))
-            self.window = pygame.display.set_mode((1280, 720), pygame.RESIZABLE)
+            self.window = pygame.display.set_mode((1280, 720), 0)
             self.settings.save()
             self.error = True
         self.scaled_frame = None
@@ -46,10 +46,6 @@ class DisplayManager:
         mapped = []
         for event in events:
             if event.type == pygame.VIDEORESIZE and not self.settings.get('fullscreen'):
-                size = max(640, min(7680, event.w)), max(360, min(4320, event.h))
-                self.settings.settings['resolution'] = size
-                self.apply()
-                self.settings.save()
                 continue
             if event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN and getattr(event, 'mod', 0) & pygame.KMOD_ALT:
                 self.settings.set('fullscreen', not self.settings.get('fullscreen'))

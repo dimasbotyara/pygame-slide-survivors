@@ -27,6 +27,11 @@ def click(rect):
 
 class MenuTests(unittest.TestCase):
     def setUp(self):
+        folder = TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        patcher = patch('settings_manager.SETTINGS_FILE', Path(folder.name) / 'settings.json')
+        patcher.start()
+        self.addCleanup(patcher.stop)
         self.game = Game()
         self.game.state = 'menu'
 
