@@ -14,6 +14,7 @@ from upgrades import UpgradeManager
 from particles import ParticleManager, Particle
 from items import XPOrb, DroppedItem, roll_drop
 from world import World
+from wildlife import HabitatFade
 from spatial import EnemyGrid
 from consumables import TONICS
 from ui import (UI, menu_inputs, menu_rect, pause_rect, hero_rect, upgrade_rect,
@@ -102,6 +103,7 @@ class Game:
         self.camera = None
         self.world = None
         self.enemies = []
+        self.habitat_fades = []
         self.enemy_projectiles = []
         self.pending_explosions = []
         self.xp_orbs = []
@@ -270,6 +272,7 @@ class Game:
         self.ice_trail = IceTrail()
         self.pulse_auras = PulseAuras()
         self.enemies = []
+        self.habitat_fades = []
         self.enemy_projectiles = []
         self.pending_explosions = []
         self.xp_orbs = []
@@ -1442,12 +1445,14 @@ class Game:
             # Environmental removal: no kill callbacks, corpse, fuse, combo or loot.
             enemy.alive = False
             enemy.hp = 0
-            self.particle_manager.spawn_death_particles(enemy.x, enemy.y, enemy.color, count=5)
+            self.habitat_fades.append(HabitatFade(enemy))
+            self.habitat_fades = self.habitat_fades[-128:]
             return False
         return True
 
     def update_enemies(self, dt):
         """Обновить всех врагов"""
+        self.habitat_fades = [effect for effect in self.habitat_fades if effect.update(dt)]
         neighbors = EnemyGrid(self.enemies)
         for enemy in self.enemies:
             if not enemy.alive or not self.check_habitat(enemy):
@@ -1459,6 +1464,7 @@ class Game:
                 enemy.stun_timer -= dt
                 enemy.velocity_x = 0
                 enemy.velocity_y = 0
+                enemy.walk_frame = 0
                 # Визуал мигания при стане
                 if int(enemy.stun_timer * 8) % 2 == 0:
                     enemy.flash_timer = 0.05
@@ -2496,6 +2502,11 @@ class Game:
         for enemy in self.enemies:
             if self.visible(enemy):
                 enemy.draw(self.screen, self.camera)
+
+        # Visual-only environmental deaths are never combat entities.
+        for effect in self.habitat_fades:
+            if self.visible(effect):
+                effect.draw(self.screen, self.camera)
 
         # Снаряды врагов
         for proj in self.enemy_projectiles:
