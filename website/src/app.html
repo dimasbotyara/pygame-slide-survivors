@@ -32,12 +32,24 @@
     <div class="section-kicker"><span>{{ tr('01 / WHAT IS INSIDE', '01 / ЧТО ВНУТРИ') }}</span><span>{{ tr('SMALL GAME. BIG CHAOS.', 'МАЛЕНЬКАЯ ИГРА. БОЛЬШОЙ ХАОС.') }}</span></div>
     <div class="section-heading"><h2>{{ tr('RUN. STRIKE.', 'БЕГИ. БЕЙ.') }}<br><em>{{ tr('REPEAT.', 'ПОВТОРЯЙ.') }}</em></h2><p>{{ tr('Every run tells a new story. The hordes keep coming, and your hero keeps getting stronger.', 'Каждый забег — новая история. Толпы не заканчиваются, а твой герой становится только сильнее.') }}</p></div>
     <div class="gameplay-grid">
-      <div nbSurface class="screenshot-card"><div class="window-bar"><span class="window-dots"><i></i><i></i><i></i></span><span>SLIDE_SURVIVORS.EXE</span><span>✳</span></div><img [src]="language() === 'en' ? 'gameplay-en.png' : 'gameplay.png'" [attr.alt]="tr('Slide Survivors gameplay screenshot: hero and enemies in the arena', 'Скриншот игрового процесса Slide Survivors: герой и враги на арене')" loading="lazy"><div class="screenshot-footer"><span>◉ {{ tr('IN THE GAME', 'ВНУТРИ ИГРЫ') }}</span><span>{{ tr('ACTUAL GAMEPLAY', 'НАСТОЯЩИЙ ИГРОВОЙ КАДР') }} ↗</span></div></div>
+      <div nbSurface class="screenshot-card"><div class="window-bar"><span class="window-dots"><i></i><i></i><i></i></span><span>SLIDE_SURVIVORS.EXE</span><span>✳</span></div><img [src]="'screenshots/ingame-' + language() + '.png'" [attr.alt]="tr('Slide Survivors gameplay screenshot: hero and enemies in the arena', 'Скриншот игрового процесса Slide Survivors: герой и враги на арене')" loading="lazy"><div class="screenshot-footer"><span>◉ {{ tr('IN THE GAME', 'ВНУТРИ ИГРЫ') }}</span><span>{{ tr('ACTUAL GAMEPLAY', 'НАСТОЯЩИЙ ИГРОВОЙ КАДР') }} ↗</span></div></div>
       <div class="feature-stack">
         <article class="feature"><div class="feature-icon mint">↗</div><div><span class="feature-number">{{ tr('01 / MOVEMENT', '01 / ДВИЖЕНИЕ') }}</span><h3>{{ tr('SLIDE IN STYLE', 'СКОЛЬЗИ КРАСИВО') }}</h3><p>{{ tr('Dodge attacks, break through the crowd and keep your momentum.', 'Ускользай от ударов, пробивайся сквозь толпу и не теряй темп.') }}</p></div></article>
         <article class="feature"><div class="feature-icon peach">✦</div><div><span class="feature-number">{{ tr('02 / PROGRESSION', '02 / РОСТ') }}</span><h3>{{ tr('BUILD YOUR WAY', 'СОБЕРИ СВОЙ БИЛД') }}</h3><p>{{ tr('Collect XP, pick upgrades and find combinations that fit your style.', 'Копи опыт, выбирай улучшения и находи сочетания под свой стиль.') }}</p></div></article>
         <article class="feature"><div class="feature-icon lilac">✳</div><div><span class="feature-number">{{ tr('03 / EXPLORATION', '03 / ИССЛЕДОВАНИЕ') }}</span><h3>{{ tr('A WORLD IN MOTION', 'МИР НЕ СТОИТ НА МЕСТЕ') }}</h3><p>{{ tr('Ten biomes, native creatures and bosses waiting to meet you.', 'Десять биомов, местные обитатели и боссы, готовые встретить тебя.') }}</p></div></article>
       </div>
+    </div>
+  </section>
+  <section class="section wrap gallery-section" id="screenshots">
+    <div class="section-kicker"><span>{{ tr('SCREENSHOTS / IN GAME', 'СКРИНШОТЫ / В ИГРЕ') }}</span><span>{{ tr('REAL FRAMES FROM THE GAME', 'НАСТОЯЩИЕ КАДРЫ ИЗ ИГРЫ') }}</span></div>
+    <div class="gallery-heading"><div><h2>{{ tr('TAKE A', 'ЗАГЛЯНИ') }}<br><em>{{ tr('CLOSER LOOK.', 'ВНУТРЬ ИГРЫ.') }}</em></h2><p>{{ tr('From the first menu to the last run — see the game for yourself.', 'От первого меню до результатов забега — посмотри на игру своими глазами.') }}</p></div><span class="gallery-tip">{{ tr('CLICK TO ENLARGE ↗', 'НАЖМИ, ЧТОБЫ УВЕЛИЧИТЬ ↗') }}</span></div>
+    <div class="gallery-grid">
+      @for (shot of screenshots; track shot.file; let i = $index) {
+        <a class="gallery-card" [href]="'screenshots/' + shot.file + '-' + language() + '.png'" target="_blank" rel="noopener noreferrer" [attr.aria-label]="tr('Open full-size screenshot: ', 'Открыть скриншот в полном размере: ') + tr(shot.en, shot.ru)">
+          <img [src]="'screenshots/' + shot.file + '-' + language() + '.png'" [attr.alt]="tr(shot.en, shot.ru)" loading="lazy" width="1440" height="900">
+          <span><b>{{ i + 1 < 10 ? '0' : '' }}{{ i + 1 }} / {{ tr(shot.en, shot.ru) }}</b><b aria-hidden="true">↗</b></span>
+        </a>
+      }
     </div>
   </section>
   <section class="roster-section" id="heroes"><div class="wrap section">

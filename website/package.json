@@ -3,9 +3,10 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "start": "ng serve --host 0.0.0.0 --allowed-hosts",
-    "build": "ng build",
-    "test:language": "node --experimental-strip-types tests/language.test.mjs"
+    "start": "node scripts/sync-screenshots.mjs && ng serve --host 0.0.0.0 --allowed-hosts",
+    "build": "node scripts/sync-screenshots.mjs && ng build",
+    "test:language": "node --experimental-strip-types tests/language.test.mjs",
+    "test:screenshots": "node tests/screenshots.test.mjs"
   },
   "dependencies": {
     "@angular/common": "^21.2.0",

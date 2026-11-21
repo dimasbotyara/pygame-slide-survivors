@@ -6,6 +6,18 @@
 
 A top-down arena roguelike built with Pygame. Your hero punches automatically; you aim the fists and steer the slide. Slip past a crab just before its attack lands, turn back with a charged cleave, and collect the XP before the next wave reaches you.
 
+## Screenshots
+
+| Gameplay | Main menu |
+| :---: | :---: |
+| ![Gameplay](screenshots/ingame-en.png) | ![Main menu](screenshots/mainmenu-en.png) |
+| **Hero selection** | **Bestiary** |
+| ![Hero selection](screenshots/selecthero-en.png) | ![Bestiary](screenshots/bestiary-en.png) |
+| **Achievements** | **Settings** |
+| ![Achievements](screenshots/achievements-en.png) | ![Settings](screenshots/settings-en.png) |
+| **Pause menu** | **Run results** |
+| ![Pause menu](screenshots/pausemenu-en.png) | ![Run results](screenshots/gameover-en.png) |
+
 ## Start a run
 
 From the project directory, with Python 3 and pip installed:

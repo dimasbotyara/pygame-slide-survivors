@@ -1,6 +1,6 @@
 # Slide Survivors website
 
-A static Angular landing page using the actual [ng-brutalism](https://github.com/khangtrannn/ng-brutalism) UI primitives (MIT) and Tailwind CSS v4. The default theme is dark. The site selects English or Russian from browser language preferences (falling back to English); a manually chosen language and theme are stored locally and take priority on future visits. The header includes a touch-friendly menu on small screens. The gameplay image is rendered from the game; the hero SVG illustration uses the game’s actual sprite patterns and colours. Bundled typefaces are from the game's `assets/fonts` directory (see their OFL licenses there).
+A static Angular landing page using the actual [ng-brutalism](https://github.com/khangtrannn/ng-brutalism) UI primitives (MIT) and Tailwind CSS v4. The default theme is dark. The site selects English or Russian from browser language preferences (falling back to English); a manually chosen language and theme are stored locally and take priority on future visits. The header includes a touch-friendly menu on small screens. The screenshot gallery uses the actual screenshots in the repository’s `screenshots/` directory (staged automatically when starting or building the site); the hero SVG illustration uses the game’s actual sprite patterns and colours. Bundled typefaces are from the game's `assets/fonts` directory (see their OFL licenses there).
 
 ## Develop
 

@@ -27,6 +27,8 @@ jobs:
       - name: Build for repository Pages URL
         run: npm run build -- --base-href "/${GITHUB_REPOSITORY#*/}/"
         working-directory: website
+      - run: npm run test:screenshots
+        working-directory: website
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
