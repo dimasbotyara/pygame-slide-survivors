@@ -238,6 +238,10 @@ class Player:
             if self.tonic_timers[item] <= 0:
                 del self.tonic_timers[item]
 
+    def temp_duration_bonus(self):
+        """Врождённая пассивка Шэдоу: временные улучшения длятся дольше."""
+        return SHADOW_PASSIVE_TEMP_BONUS if self.hero_id == "shadow" else 0.0
+
     def get_max_hp(self):
         return PLAYER_BASE_HP + self.stats["max_hp"]
 
@@ -255,6 +259,10 @@ class Player:
 
     def get_fist_damage(self):
         base = FIST_BASE_DAMAGE * (1 + self.effective_stat("damage") / 100)
+        # Врождённая пассивка Браулера: чем больше прогресс уровня, тем выше урон
+        if self.hero_id == "brawler":
+            progress = min(1.0, self.xp / self.xp_to_next) if self.xp_to_next else 0.0
+            base *= 1 + (BRAWLER_PASSIVE_LEVEL_RAGE / 100) * progress
         # Ярость
         if self.stats["fist_rage"] > 0:
             hp_ratio = self.hp / self.max_hp
@@ -391,8 +399,8 @@ class Player:
 
         self.slide_max_charges = self.get_slide_max_charges()
 
-        if self.stats["hp_regen"] > 0:
-            self.hp = min(self.hp + self.stats["hp_regen"] * dt, self.max_hp)
+        # Пассивная регенерация: 1 HP/сек по умолчанию + бонусы улучшений
+        self.hp = min(self.hp + (PLAYER_BASE_HP_REGEN + self.stats["hp_regen"]) * dt, self.max_hp)
 
         # Таймеры
         for attr in ['invincible_timer', 'slide_invincible_after_timer',
@@ -743,7 +751,7 @@ class Player:
 
         # Адреналин при получении урона
         if self.stats.get("adrenaline", 0) > 0:
-            self.adrenaline_timer = 3.0
+            self.adrenaline_timer = 3.0 + self.temp_duration_bonus()
 
         # Сброс таймера регена щита
         self.shield_regen_timer = 0.0

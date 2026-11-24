@@ -1766,6 +1766,12 @@ class Game:
 
         # Убийство
         if killed:
+            # Врождённая пассивка Слайдера: убийство скольжением лечит
+            if source in ("slide", "shockwave") and self.player.hero_id == "slider":
+                self.player.heal(SLIDER_PASSIVE_SLIDE_KILL_HEAL)
+                self.particle_manager.spawn_heal_particles(
+                    self.player.x, self.player.y, count=3
+                )
             self.on_enemy_killed(enemy, magnetize_xp=magnetize_xp)
 
         return killed, damage, is_crit
@@ -2239,6 +2245,9 @@ class Game:
     # ================================================================
     def on_enemy_killed(self, enemy, magnetize_xp=False):
         """Обработка убийства врага"""
+        # Врождённая пассивка Спарка: шанс примагнить опыт и предмет с убийства
+        if not magnetize_xp and self.player.hero_id == "spark":
+            magnetize_xp = random.random() * 100 < SPARK_PASSIVE_MAGNET_CHANCE
         self.player.enemies_killed += 1
         self.player.add_combo()
         self.player.gain_ult_charge(3.0 + self.player.stats["ult_per_kill"])
@@ -2274,6 +2283,8 @@ class Game:
         item_type = roll_drop(drop_bonus)
         if item_type:
             item = DroppedItem(enemy.x, enemy.y, item_type)
+            if magnetize_xp:
+                item.pulled = True
             self.dropped_items.append(item)
 
         # Взрывник — взрыв при смерти
@@ -2375,7 +2386,8 @@ class Game:
         """Применить эффект подобранного предмета"""
         if item_type in TONICS:
             tonic = TONICS[item_type]
-            self.player.tonic_timers[item_type] = tonic.seconds
+            # Врождённая пассивка Шэдоу: временные улучшения длятся дольше
+            self.player.tonic_timers[item_type] = tonic.seconds + self.player.temp_duration_bonus()
             self.particle_manager.add_message(t('TONIC_' + item_type, tonic.bonus, tonic.seconds), tonic.color)
         elif item_type == "heal":
             heal_amount = HEAL_AMOUNT * self.player.get_heal_effectiveness()
@@ -2434,7 +2446,10 @@ class Game:
             self.camera.add_shake(SHAKE_BOMB)
 
         elif item_type == "speed_boost":
-            self.player.speed_boost_timer = SPEED_BOOST_DURATION + self.player.stats["boost_duration"]
+            # Врождённая пассивка Шэдоу: временные улучшения длятся дольше
+            self.player.speed_boost_timer = (SPEED_BOOST_DURATION
+                                             + self.player.stats["boost_duration"]
+                                             + self.player.temp_duration_bonus())
             self.player.speed_boost_multiplier = SPEED_BOOST_MULTIPLIER
             self.particle_manager.add_message(t("MSG_SPEED_BOOST"), CYAN)
 

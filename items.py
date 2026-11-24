@@ -97,6 +97,7 @@ class DroppedItem:
         self.y = float(y)
         self.item_type = item_type
         self.alive = True
+        self.pulled = False  # примагничен к игроку (пассивка Спарка)
         self.lifetime = ITEM_LIFETIME
         self.size = ITEM_SIZE
         self.anim_timer = 0.0
@@ -133,8 +134,9 @@ class DroppedItem:
         dy = player_y - self.y
         dist = math.sqrt(dx * dx + dy * dy)
 
-        # Подтягивание к игроку (например, во время ультимейта Слайдера)
-        if pull and dist > 25 and dist < 340 and dist > 0:
+        # Подтягивание к игроку: примагниченный предмет летит отовсюду,
+        # а во время ульта Слайдера подтягивается всё ближнее
+        if (self.pulled or (pull and dist < 340)) and dist > 25 and dist > 0:
             pull_speed = 640
             self.x += (dx / dist) * pull_speed * dt
             self.y += (dy / dist) * pull_speed * dt

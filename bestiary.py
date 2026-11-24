@@ -12,7 +12,7 @@ from consumables import TONICS, TONIC_IDS
 from enemies import Enemy, Boss, BOSS_KEYS
 from heroes import HEROES, HERO_KEYS
 from settings import (ENEMY_TYPES, BOSS_SPAWN_INTERVAL, EXPLOSION_FUSE,
-                      GREEN, PURPLE, RED, CYAN)
+                      GREEN, PURPLE, RED, CYAN, PLAYER_BASE_HP_REGEN)
 from typography import TextFont
 from upgrades import create_all_upgrades
 from wildlife import RESIDENTS
@@ -239,7 +239,8 @@ class Bestiary:
             cap = t('GUIDE_UPGRADE_MAX_LEVEL', u.max_level) if u.max_level else t('GUIDE_UPGRADE_UNLIMITED')
             return [t('GUIDE_UPGRADE_VALUE', f'{u.value:g}'), cap]
         h = HEROES[key]
-        return [f"{t('HERO_HP')}: {h['base_hp']}",
+        return [t('GUIDE_HERO_PASSIVE_' + key),
+                f"{t('HERO_HP')}: {h['base_hp']} · {t('GUIDE_HERO_REGEN', f'{PLAYER_BASE_HP_REGEN:g}')}",
                 f"{t('HERO_SPEED')}: {h['base_speed']}",
                 t('GUIDE_HERO_SLIDE_CHARGES', h['slide_charges']),
                 t('GUIDE_HERO_CRIT', h['crit_chance'], h['crit_mult']),
