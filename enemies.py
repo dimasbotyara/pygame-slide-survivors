@@ -828,7 +828,8 @@ class EnemySpawner:
         ]
         self.next_threshold_idx = 0
 
-    def update(self, dt, player_x, player_y, enemies, game_messages):
+    def update(self, dt, player_x, player_y, enemies, game_messages, arena=None):
+        """arena: (center_x, center_y, radius) активной арены босса или None."""
         self.game_time += dt
         self.boss_timer += dt
 
@@ -848,7 +849,7 @@ class EnemySpawner:
         while self.spawn_timer >= spawn_interval:
             self.spawn_timer -= spawn_interval
             if len(enemies) < ENEMY_MAX_COUNT:
-                enemy = self.spawn_enemy(player_x, player_y)
+                enemy = self.spawn_enemy(player_x, player_y, arena)
                 if enemy:
                     enemies.append(enemy)
 
@@ -861,11 +862,18 @@ class EnemySpawner:
 
         return None  # возврат босса если нужен
 
-    def spawn_enemy(self, player_x, player_y):
+    def spawn_enemy(self, player_x, player_y, arena=None):
         angle = random.random() * math.pi * 2
-        dist = random.uniform(ENEMY_SPAWN_RADIUS_MIN, ENEMY_SPAWN_RADIUS_MAX)
-        spawn_x = player_x + math.cos(angle) * dist
-        spawn_y = player_y + math.sin(angle) * dist
+        if arena is not None:
+            # Во время босса монстры появляются ЗА ареной, но свободно заходят на неё
+            center_x, center_y, arena_radius = arena
+            dist = random.uniform(arena_radius + 90, arena_radius + 420)
+            spawn_x = center_x + math.cos(angle) * dist
+            spawn_y = center_y + math.sin(angle) * dist
+        else:
+            dist = random.uniform(ENEMY_SPAWN_RADIUS_MIN, ENEMY_SPAWN_RADIUS_MAX)
+            spawn_x = player_x + math.cos(angle) * dist
+            spawn_y = player_y + math.sin(angle) * dist
 
         if self.world is not None and random.random() < RESIDENT_SPAWN_CHANCE:
             habitat = self.world.biome_at(spawn_x, spawn_y).key

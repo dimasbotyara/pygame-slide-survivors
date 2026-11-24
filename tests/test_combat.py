@@ -21,18 +21,20 @@ class CombatTests(unittest.TestCase):
     def equip(self, key):
         self.game.upgrade_manager.upgrade_map[key].apply(self.player)
 
-    def test_bomb_extends_remaining_streak_once_per_pickup(self):
+    def test_bomb_extends_streak_and_adds_kill_combo_points(self):
         self.player.add_combo()
         self.player.combo_timer = 1.25
         self.game.enemies = [Enemy(0, 0, 'ghoul') for _ in range(4)]
         self.game.apply_item_effect('bomb')
         self.assertEqual(self.player.enemies_killed, 4)
         self.assertEqual(self.player.combo_timer, 6.25)
+        # Каждое убийство бомбой даёт очко комбо: 1 до + 4 убийства
+        self.assertEqual(self.player.combo_count, 5)
         self.player.add_combo()
         self.assertEqual(self.player.combo_timer, 6.25)
         self.game.apply_item_effect('bomb')  # empty arena
         self.assertEqual(self.player.combo_timer, 11.25)
-        self.assertEqual(self.player.combo_count, 2)
+        self.assertEqual(self.player.combo_count, 6)
 
     def test_bomb_with_no_streak_does_not_bank_time(self):
         self.game.apply_item_effect('bomb')
