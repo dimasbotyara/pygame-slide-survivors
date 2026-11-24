@@ -152,6 +152,8 @@ class Player:
         self.slide_angle = 0.0
         self.slide_was_pressed = False
         self.slide_needs_repress = False
+        # Кулдаун повторного урона скольжения по одному и тому же врагу
+        self.slide_hit_timers = {}
 
         # Kill комбо
         self.combo_count = 0
@@ -199,6 +201,8 @@ class Player:
         # Неуязвимость
         self.invincible_timer = 0.0
         self.slide_invincible_after_timer = 0.0
+        # Вампиризм отключён, пока действует окно неуязвимости + 0.3с после удара
+        self.lifesteal_block_timer = 0.0
 
         # Опыт
         self.level = 1
@@ -324,8 +328,12 @@ class Player:
         return SLIDE_COOLDOWN * max(0.1, (1 - self.stats["slide_cooldown"] / 100))
 
     def get_slide_knockback_damage(self):
-        base = SLIDE_BASE_KNOCKBACK_DAMAGE * (1 + self.effective_stat("slide_damage") / 100)
-        return base + self.slide_current_speed * SLIDE_SPEED_DAMAGE_MULTIPLIER
+        base = (SLIDE_BASE_KNOCKBACK_DAMAGE
+                + self.slide_current_speed * SLIDE_SPEED_DAMAGE_MULTIPLIER)
+        base *= (1 + self.effective_stat("slide_damage") / 100)
+        # Слайдер скользит «по-настоящему», у остальных это в основном рывок
+        base *= self.hero_data.get("slide_damage_mult", 1.0)
+        return base
 
     def get_slide_knockback_radius(self):
         return SLIDE_KNOCKBACK_RADIUS + self.size + self.stats["slide_knockback_radius"]
@@ -388,7 +396,8 @@ class Player:
 
         # Таймеры
         for attr in ['invincible_timer', 'slide_invincible_after_timer',
-                      'flash_timer', 'speed_boost_timer', 'counter_invincible_timer']:
+                      'flash_timer', 'speed_boost_timer', 'counter_invincible_timer',
+                      'lifesteal_block_timer']:
             val = getattr(self, attr)
             if val > 0:
                 setattr(self, attr, val - dt)
@@ -531,6 +540,7 @@ class Player:
         self.is_sliding = True
         self.total_slides_count += 1
         self.slide_timer = 0.0
+        self.slide_hit_timers.clear()
         self.slide_charges -= 1
         if self.slide_charges < self.slide_max_charges and self.slide_cooldown_timer <= 0:
             self.slide_cooldown_timer = self.get_slide_cooldown()
@@ -557,6 +567,12 @@ class Player:
         progress = min(self.slide_timer / duration, 1.0)
         speed_factor = max(0, 1.0 - progress ** SLIDE_DECELERATION_CURVE)
         self.slide_current_speed = self.get_slide_initial_speed() * speed_factor
+
+        # Кулдауны повторного урона по врагам
+        for eid in list(self.slide_hit_timers):
+            self.slide_hit_timers[eid] -= dt
+            if self.slide_hit_timers[eid] <= 0:
+                del self.slide_hit_timers[eid]
 
         target_angle = math.atan2(my - self.y, mx - self.x)
         angle_diff = target_angle - self.slide_angle
@@ -721,6 +737,10 @@ class Player:
         if rng_module.random() * 100 < self.stats["block_chance"]:
             return 0
 
+        # Удар прошёл: вампиризм не работает всё время неуязвимости + 0.3с
+        self.lifesteal_block_timer = (PLAYER_INVINCIBILITY_AFTER_HIT
+                                      + self.stats["hit_grace"] + 0.3)
+
         # Адреналин при получении урона
         if self.stats.get("adrenaline", 0) > 0:
             self.adrenaline_timer = 3.0
@@ -756,7 +776,7 @@ class Player:
 
     def lifesteal(self, damage_dealt):
         ls = self.get_fist_lifesteal()
-        if ls > 0:
+        if ls > 0 and self.lifesteal_block_timer <= 0:
             heal_amount = damage_dealt * ls / 100
             self.hp = min(self.hp + heal_amount, self.max_hp)
             return heal_amount

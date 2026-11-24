@@ -62,10 +62,16 @@ SLIDE_COOLDOWN = 5.0
 SLIDE_DECELERATION_CURVE = 3.0
 SLIDE_TURN_SPEED = 90
 SLIDE_KNOCKBACK_RADIUS = 30
-SLIDE_BASE_KNOCKBACK_DAMAGE = 15
+SLIDE_BASE_KNOCKBACK_DAMAGE = 10
 SLIDE_KNOCKBACK_FORCE = 400
-SLIDE_SPEED_DAMAGE_MULTIPLIER = 0.05
+SLIDE_SPEED_DAMAGE_MULTIPLIER = 0.17
+# Один и тот же враг получает урон от скольжения не чаще, чем раз в этот интервал
+SLIDE_HIT_COOLDOWN = 0.45
+# Для всех героев кроме Слайдера скольжение — в основном мобильность
+SLIDE_DAMAGE_NON_SLIDER_MULT = 0.55
 SLIDE_TRAIL_DURATION = 2.0
+# Скорость рикошета ульта Слайдера (герой и клоны)
+SLIDER_ULT_SPEED = 1750
 
 # ============================================================
 # УВОРОТ, ЛЁД И АУРЫ
@@ -93,6 +99,8 @@ COMBO_MAX_MULTIPLIER = 500
 # ============================================================
 FIST_BASE_DAMAGE = 18
 FIST_BASE_ATTACK_SPEED = 1.5
+# Прорубающий удар бьёт всех вокруг, но с пониженным уроном
+CLEAVE_DAMAGE_MULTIPLIER = 0.6
 FIST_BASE_RANGE = 65
 FIST_KNOCKBACK = 150
 FIST_ARC = 140
@@ -251,7 +259,7 @@ BOSS_COLOR = PURPLE
 BOSS_OUTLINE_COLOR = BLACK
 BOSS_XP = 500
 BOSS_KNOCKBACK_RESIST = 0.9
-BOSS_ARENA_RADIUS = 600
+BOSS_ARENA_RADIUS = 1200
 BOSS_ARENA_WALL_THICKNESS = 8
 
 # ============================================================
@@ -263,6 +271,9 @@ XP_PICKUP_RADIUS_BASE = 60
 XP_ORB_SIZE = 5
 XP_ORB_COLOR = YELLOW
 XP_ORB_SPEED = 350
+# Чем дольше сфера летит к игроку, тем сильнее она разгоняется
+XP_ORB_ACCELERATION = 420
+XP_ORB_MAX_SPEED = 1500
 CHOICES_PER_LEVEL = 3
 
 # ============================================================

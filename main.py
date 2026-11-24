@@ -82,6 +82,7 @@ class Game:
         self.shadow_ult_blades = []
         self.crack_overlay_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
         self.storm_overlay_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+        self.spark_glow_surface = pygame.Surface((232, 232), pygame.SRCALPHA)
         self.lightning_bolts = []
         self.shadow_slashes = []
         self.bestiary = None
@@ -779,10 +780,11 @@ class Game:
 
         # Обновить мир (следы, декорации)
         self.world.update(dt)
-        # Спавн врагов
+        # Спавн врагов (во время босса — за пределами арены)
         self.game_messages.clear()
         self.spawner.update(dt, self.player.x, self.player.y,
-                           self.enemies, self.game_messages)
+                           self.enemies, self.game_messages,
+                           arena=self.active_boss_arena())
 
         # Передать сообщения от спавнера
         for msg in self.game_messages:
@@ -843,9 +845,9 @@ class Game:
         # Обновить частицы
         self.particle_manager.update(dt)
 
-        # Defer level-up selection until the committed ultimate animation ends.
-        if (self.player.pending_levels > 0 and not self.ultimate_cast_pending
-                and self.slider_ultimate is None):
+        # Улучшения можно забирать даже посреди ульта Слайдера: экран выбора
+        # ставит полёт на паузу и возобновляет его после выбора.
+        if self.player.pending_levels > 0 and not self.ultimate_cast_pending:
             self.player.pending_levels -= 1
             luck = self.player.stats["luck"]
             hero_id = getattr(self.player, 'hero_id', 'slider')
@@ -932,13 +934,27 @@ class Game:
 
         if hero_id == 'slider':
             # Automatically ricochet through nearby foes, then return to the
-            # exact cast position. Controls stay locked until the return ends.
+            # exact cast position. Three echo clones scatter in other
+            # directions and converge back into the hero on the return.
             radius = 760
             targets = [e for e in self.enemies if e.alive
                        and math.hypot(e.x-x, e.y-y) <= radius + e.size]
+
+            def make_flyer(fx, fy, heading, dmg_mult):
+                return {'x': fx, 'y': fy, 'heading': heading, 'dmg_mult': dmg_mult,
+                        'target': None, 'visited': set(), 'last_target': None}
+
+            hero_flyer = make_flyer(x, y, player.facing_angle, 1.0)
+            clones = []
+            for i in range(3):
+                # Три клона летят в разные стороны, слайдер — в свою, отличную от них
+                heading = player.facing_angle + math.tau * (i + 1) / 4
+                clone = make_flyer(x, y, heading, 0.7)
+                clone.update({'merged': False, 'scale': 1.0})
+                clones.append(clone)
             self.slider_ultimate = {
-                'origin': (x, y), 'timer': 2.0, 'target': None,
-                'visited': set(), 'last_target': None, 'returning': False,
+                'origin': (x, y), 'timer': 2.0, 'returning': False,
+                'hero': hero_flyer, 'clones': clones,
             }
             player.ultimate_action_lock = True
             player.is_sliding = False
@@ -999,11 +1015,13 @@ class Game:
                 remaining.remove(target)
                 point = (target.x, target.y)
                 segments = lightning_segments(current, point, int(self.game_time*10000)+index)
-                self.lightning_bolts.append({'segments': segments, 'timer': .34, 'duration': .34})
+                self.lightning_bolts.append({'segments': segments, 'timer': .34, 'duration': .34,
+                                             'impact': point})
                 self.deal_damage_to_enemy(
                     target, 175 + player.get_fist_damage()*.85,
                     can_crit=False, can_stun=False, can_lifesteal=False,
-                    particle_color=(250, 189, 47), particle_count=15, source='ult'
+                    particle_color=(250, 189, 47), particle_count=15, source='ult',
+                    magnetize_xp=True
                 )
                 if target.alive:
                     target.stun_timer = max(getattr(target, 'stun_timer', 0), .65)
@@ -1015,7 +1033,8 @@ class Game:
                     angle = i*math.tau/6 + self.game_time*.4
                     point = (x+math.cos(angle)*210, y+math.sin(angle)*210)
                     segments = lightning_segments((x, y), point, i+int(self.game_time*1000))
-                    self.lightning_bolts.append({'segments': segments, 'timer': .34, 'duration': .34})
+                    self.lightning_bolts.append({'segments': segments, 'timer': .34, 'duration': .34,
+                                                 'impact': point})
                     strikes.append(point)
             for point in strikes[::2][:6]:
                 self.storm_zones.append({'x': point[0], 'y': point[1], 'radius': 84,
@@ -1023,8 +1042,11 @@ class Game:
             self._ring(x, y, 310, (250, 189, 47), .65)
             self.spark_storm_timer = self.spark_storm_duration
             self.spark_storm_tick = 0.0
+            # Капли дождя живут в мировых координатах: при движении игрока
+            # дождь остаётся на месте в мире, а не прилипает к экрану.
             self.rain_drops = [
-                [random.uniform(0, SCREEN_WIDTH), random.uniform(0, SCREEN_HEIGHT),
+                [x + random.uniform(-SCREEN_WIDTH * 0.62, SCREEN_WIDTH * 0.62),
+                 y + random.uniform(-SCREEN_HEIGHT * 0.62, SCREEN_HEIGHT * 0.62),
                  random.uniform(420, 760), random.uniform(12, 24)]
                 for _ in range(150)
             ]
@@ -1039,93 +1061,145 @@ class Game:
             ]
             self._ring(x, y, 110, (203, 166, 247), .55)
 
+    def _angle_delta(self, a, b):
+        d = a - b
+        while d > math.pi:
+            d -= math.tau
+        while d < -math.pi:
+            d += math.tau
+        return d
+
+    def _slider_flyer_step(self, f, dt):
+        """Одна фигура ульта Слайдера (герой или клон): рикошет по врагам.
+
+        Возвращает True, если рядом не осталось целей."""
+        x, y = f['x'], f['y']
+        nearby = [e for e in self.enemies if e.alive
+                  and math.hypot(e.x-x, e.y-y) <= 820 + e.size]
+        target = f['target']
+        if target is None or not target.alive:
+            candidates = [e for e in nearby if id(e) not in f['visited']]
+            if not candidates:
+                if nearby:
+                    f['visited'].clear()
+                    candidates = nearby[:]
+                else:
+                    return True
+            if len(candidates) > 1:
+                alternatives = [e for e in candidates if id(e) != f['last_target']]
+                if alternatives:
+                    candidates = alternatives
+            # Каждый летит в свою сторону: предпочитаем цели впереди себя
+            forward = [e for e in candidates
+                       if abs(self._angle_delta(
+                           math.atan2(e.y-y, e.x-x), f['heading'])) <= math.pi/2]
+            if forward:
+                candidates = forward
+            target = random.choice(candidates)
+            f['target'] = target
+
+        if target is not None and target.alive:
+            start = (x, y)
+            dx, dy = target.x-x, target.y-y
+            distance = math.hypot(dx, dy)
+            travel = min(distance, SLIDER_ULT_SPEED * dt)
+            if distance > 1e-6:
+                x += dx / distance * travel
+                y += dy / distance * travel
+                f['heading'] = math.atan2(dy, dx)
+            end = (x, y)
+            f['x'], f['y'] = x, y
+            if travel > 0:
+                self.shadow_slashes.append({
+                    'segments': lightning_segments(start, end,
+                        int(self.game_time*10000)+random.randrange(10000), 4),
+                    'timer': .13, 'duration': .13,
+                    'color': (96, 231, 226),
+                })
+                # Hit anything the fast ricochet crosses, with no dash cooldown.
+                sx, sy = end[0]-start[0], end[1]-start[1]
+                length_sq = sx*sx + sy*sy or 1.0
+                crossed = []
+                for enemy in nearby:
+                    if id(enemy) in f['visited']:
+                        continue
+                    t = max(0.0, min(1.0,
+                        ((enemy.x-start[0])*sx+(enemy.y-start[1])*sy)/length_sq))
+                    px, py = start[0]+sx*t, start[1]+sy*t
+                    gap = math.hypot(enemy.x-px, enemy.y-py)
+                    if gap <= enemy.size + self.player.size + 24:
+                        crossed.append((t, enemy))
+                for _, enemy in sorted(crossed, key=lambda pair: pair[0]):
+                    if not enemy.alive:
+                        continue
+                    f['visited'].add(id(enemy))
+                    f['last_target'] = id(enemy)
+                    nx, ny = enemy.x-start[0], enemy.y-start[1]
+                    norm = math.hypot(nx, ny) or 1.0
+                    self.deal_damage_to_enemy(
+                        enemy, (145 + self.player.get_fist_damage()*1.45) * f['dmg_mult'],
+                        knockback_force=360, knockback_dir_x=nx/norm,
+                        knockback_dir_y=ny/norm, can_crit=False,
+                        can_stun=False, can_lifesteal=False,
+                        particle_color=(96, 231, 226), particle_count=8, source='ult'
+                    )
+            if distance <= travel + 2:
+                f['visited'].add(id(target))
+                f['last_target'] = id(target)
+                f['target'] = None
+                if f['dmg_mult'] >= 1.0:
+                    self.camera.add_shake(4, .08)
+        return False
+
     def _update_slider_ultimate(self, dt):
         state = self.slider_ultimate
         if state is None:
             return
         player = self.player
+        hero_flyer = state['hero']
+        clones = state['clones']
+
         if not state['returning']:
             state['timer'] -= dt
             if state['timer'] <= 0:
                 state['returning'] = True
+            else:
+                hero_done = self._slider_flyer_step(hero_flyer, dt)
+                player.x, player.y = hero_flyer['x'], hero_flyer['y']
+                player.facing_angle = hero_flyer['heading']
+                for clone in clones:
+                    self._slider_flyer_step(clone, dt)
+                if hero_done:
+                    # Рядом не осталось целей — вся команда возвращается
+                    state['returning'] = True
 
-            nearby = [e for e in self.enemies if e.alive
-                      and math.hypot(e.x-player.x, e.y-player.y) <= 820 + e.size]
-            target = state['target']
-            if target is None or not target.alive:
-                candidates = [e for e in nearby if id(e) not in state['visited']]
-                if not candidates:
-                    if nearby:
-                        state['visited'].clear()
-                        candidates = nearby[:]
-                    else:
-                        state['returning'] = True
-                if candidates and not state['returning']:
-                    if len(candidates) > 1:
-                        alternatives = [e for e in candidates if id(e) != state['last_target']]
-                        if alternatives:
-                            candidates = alternatives
-                    target = random.choice(candidates)
-                    state['target'] = target
-
-            if not state['returning'] and target is not None and target.alive:
-                start = (player.x, player.y)
-                dx, dy = target.x-player.x, target.y-player.y
-                distance = math.hypot(dx, dy)
-                travel = min(distance, 1750 * dt)
-                if distance > 1e-6:
-                    player.x += dx / distance * travel
-                    player.y += dy / distance * travel
-                    player.facing_angle = math.atan2(dy, dx)
-                end = (player.x, player.y)
-                if travel > 0:
-                    self.shadow_slashes.append({
-                        'segments': lightning_segments(start, end,
-                            int(self.game_time*10000)+random.randrange(10000), 4),
-                        'timer': .13, 'duration': .13,
-                        'color': (96, 231, 226),
-                    })
-                    # Hit anything the fast ricochet crosses, with no dash cooldown.
-                    sx, sy = end[0]-start[0], end[1]-start[1]
-                    length_sq = sx*sx + sy*sy or 1.0
-                    crossed = []
-                    for enemy in nearby:
-                        if id(enemy) in state['visited']:
-                            continue
-                        t = max(0.0, min(1.0,
-                            ((enemy.x-start[0])*sx+(enemy.y-start[1])*sy)/length_sq))
-                        px, py = start[0]+sx*t, start[1]+sy*t
-                        gap = math.hypot(enemy.x-px, enemy.y-py)
-                        if gap <= enemy.size + player.size + 24:
-                            crossed.append((t, enemy))
-                    for _, enemy in sorted(crossed, key=lambda pair: pair[0]):
-                        if not enemy.alive:
-                            continue
-                        state['visited'].add(id(enemy))
-                        state['last_target'] = id(enemy)
-                        nx, ny = enemy.x-start[0], enemy.y-start[1]
-                        norm = math.hypot(nx, ny) or 1.0
-                        self.deal_damage_to_enemy(
-                            enemy, 145 + player.get_fist_damage()*1.45,
-                            knockback_force=360, knockback_dir_x=nx/norm,
-                            knockback_dir_y=ny/norm, can_crit=False,
-                            can_stun=False, can_lifesteal=False,
-                            particle_color=(96, 231, 226), particle_count=8, source='ult'
-                        )
-                if distance <= travel + 2:
-                    state['visited'].add(id(target))
-                    state['last_target'] = id(target)
-                    state['target'] = None
-                    self.camera.add_shake(4, .08)
         if state['returning']:
             ox, oy = state['origin']
             dx, dy = ox-player.x, oy-player.y
             distance = math.hypot(dx, dy)
-            travel = min(distance, 1750 * dt)
+            travel = min(distance, SLIDER_ULT_SPEED * dt)
             if distance > 1e-6:
                 player.x += dx / distance * travel
                 player.y += dy / distance * travel
-            if distance <= travel + 1:
+            # Клоны догоняют героя, вжимаются в него и пропадают
+            all_merged = True
+            for clone in clones:
+                if clone.get('merged'):
+                    continue
+                cdx, cdy = player.x-clone['x'], player.y-clone['y']
+                cdist = math.hypot(cdx, cdy)
+                ctravel = min(cdist, SLIDER_ULT_SPEED * dt * 1.2)
+                if cdist > 1e-6:
+                    clone['x'] += cdx / cdist * ctravel
+                    clone['y'] += cdy / cdist * ctravel
+                    clone['heading'] = math.atan2(cdy, cdx)
+                clone['scale'] = max(0.12, min(1.0, cdist / 260.0))
+                if cdist <= ctravel + 30:
+                    clone['merged'] = True
+                    self._ring(clone['x'], clone['y'], 42, (96, 231, 226), .32)
+                else:
+                    all_merged = False
+            if distance <= travel + 1 and all_merged:
                 player.x, player.y = ox, oy
                 player.velocity_x = player.velocity_y = 0.0
                 player.ultimate_action_lock = False
@@ -1140,12 +1214,14 @@ class Game:
             return
         self.spark_storm_timer = max(0.0, self.spark_storm_timer-dt)
         self.spark_storm_tick -= dt
+        # Дождь в мировых координатах: капли падают в мире и не держатся за экраном
+        px, py = self.player.x, self.player.y
         for drop in self.rain_drops:
             drop[0] -= 165 * dt
             drop[1] += drop[2] * dt
-            if drop[1] > SCREEN_HEIGHT + 20 or drop[0] < -20:
-                drop[0] = random.uniform(0, SCREEN_WIDTH + 80)
-                drop[1] = random.uniform(-90, -10)
+            if drop[1] > py + SCREEN_HEIGHT * 0.62 or drop[0] < px - SCREEN_WIDTH * 0.62:
+                drop[0] = px + random.uniform(-SCREEN_WIDTH * 0.2, SCREEN_WIDTH * 0.72)
+                drop[1] = py - random.uniform(SCREEN_HEIGHT * 0.42, SCREEN_HEIGHT * 0.62)
                 drop[2] = random.uniform(420, 760)
         if self.spark_storm_tick <= 0:
             self.spark_storm_tick += .42
@@ -1158,11 +1234,13 @@ class Game:
                     'segments': lightning_segments(start, end,
                         int(self.game_time*10000)+random.randrange(10000)),
                     'timer': .3, 'duration': .3,
+                    'impact': end,
                 })
                 self.deal_damage_to_enemy(
                     target, 72 + self.player.get_fist_damage()*.45,
                     can_crit=False, can_stun=False, can_lifesteal=False,
-                    particle_color=(250, 220, 110), particle_count=8, source='ult'
+                    particle_color=(250, 220, 110), particle_count=8, source='ult',
+                    magnetize_xp=True
                 )
                 if target.alive:
                     target.stun_timer = max(getattr(target, 'stun_timer', 0), .2)
@@ -1181,8 +1259,27 @@ class Game:
                       int(88+117*intensity))
         for x, y, speed, length in self.rain_drops:
             # Long, near-vertical streaks with a slight wind slant read clearly as rain.
+            # Капли в мировых координатах — рисуем через камеру.
+            sx, sy = self.camera.apply(x, y)
+            if sx < -30 or sx > SCREEN_WIDTH + 30 or sy < -40 or sy > SCREEN_HEIGHT + 40:
+                continue
             pygame.draw.line(self.screen, rain_color,
-                             (int(x), int(y)), (int(x-3), int(y+length)), 1)
+                             (int(sx), int(sy)), (int(sx-3), int(sy+length)), 1)
+
+    def _draw_spark_player_glow(self):
+        """Игрок светится во время ульта Спарка."""
+        casting = self.player.ult_cast_timer > 0 and self.player.hero_id == 'spark'
+        if self.spark_storm_timer <= 0 and not casting:
+            return
+        sx, sy = self.camera.apply(self.player.x, self.player.y)
+        pulse = .5 + .5 * math.sin(self.game_time * 6.0)
+        glow = self.spark_glow_surface
+        glow.fill((0, 0, 0, 0))
+        cx = cy = glow.get_width() // 2
+        for radius, alpha in ((104, 26), (82, 40), (60, 62), (40, 92)):
+            r = int(radius * (0.86 + 0.14 * pulse))
+            pygame.draw.circle(glow, (255, 220, 90, alpha), (cx, cy), r)
+        self.screen.blit(glow, (sx - cx, sy - cy))
 
     def _update_shadow_ult_blades(self, dt):
         if not self.shadow_ult_blades:
@@ -1282,7 +1379,8 @@ class Game:
                     if math.hypot(enemy.x-zone['x'], enemy.y-zone['y']) <= zone['radius']+enemy.size:
                         self.deal_damage_to_enemy(
                             enemy, 46, can_crit=False, can_stun=False, can_lifesteal=False,
-                            particle_color=(250, 189, 47), particle_count=4, source='ult'
+                            particle_color=(250, 189, 47), particle_count=4, source='ult',
+                            magnetize_xp=True
                         )
                         if enemy.alive:
                             enemy.stun_timer = max(getattr(enemy, 'stun_timer', 0), .12)
@@ -1341,6 +1439,24 @@ class Game:
             pygame.draw.circle(self.screen, (116, 85, 35), center, radius, 6)
             pygame.draw.circle(self.screen, (250, 189, 47), center, radius-5, 2)
             pygame.draw.circle(self.screen, (226, 168, 50), center, max(4, radius//4), 1)
+        # Эхо-клоны ульта Слайдера
+        state = self.slider_ultimate
+        if state:
+            for clone in state['clones']:
+                if clone.get('merged'):
+                    continue
+                scale = clone.get('scale', 1.0)
+                cx_, cy_ = self.camera.apply(clone['x'], clone['y'])
+                cx_, cy_ = int(cx_), int(cy_)
+                radius = max(3, int(self.player.size * 0.9 * scale))
+                trail = 26 + radius
+                pygame.draw.line(self.screen, (72, 178, 176), (cx_, cy_),
+                                 self.camera.apply(clone['x'] - math.cos(clone['heading']) * trail,
+                                                   clone['y'] - math.sin(clone['heading']) * trail), 2)
+                pygame.draw.circle(self.screen, (18, 60, 66), (cx_, cy_), radius + 3)
+                pygame.draw.circle(self.screen, (96, 231, 226), (cx_, cy_), radius)
+                pygame.draw.circle(self.screen, (235, 255, 255), (cx_, cy_),
+                                   max(2, radius // 2), 2)
         for effects, base in ((self.lightning_bolts, (250, 224, 127)),
                               (self.shadow_slashes, (203, 166, 247))):
             for effect in effects:
@@ -1349,6 +1465,16 @@ class Game:
                 for start, end in effect['segments']:
                     pygame.draw.line(self.screen, (28, 25, 30), self.camera.apply(*start), self.camera.apply(*end), 6)
                     pygame.draw.line(self.screen, tint, self.camera.apply(*start), self.camera.apply(*end), 3)
+                # Область удара молнии подсвечивается
+                impact = effect.get('impact')
+                if impact:
+                    ix, iy = self.camera.apply(*impact)
+                    radius = int(16 + 26 * (1 - ratio))
+                    glow = tuple(min(255, int(c * (0.3 + 0.7 * ratio)))
+                                 for c in (255, 236, 140))
+                    pygame.draw.circle(self.screen, glow, (int(ix), int(iy)), radius, 3)
+                    pygame.draw.circle(self.screen, (255, 250, 220), (int(ix), int(iy)),
+                                       max(2, radius // 3))
         for blade in self.shadow_ult_blades:
             if blade['delay'] > 0 or blade['turns'] >= 4.0:
                 continue
@@ -1410,7 +1536,10 @@ class Game:
     # БОСС-АРЕНА
     # ================================================================
     def enforce_boss_arena(self):
-        """Не дать игроку и врагам выйти за пределы арены босса"""
+        """Не дать игроку выйти за пределы арены босса.
+
+        Враги при этом ходят свободно: монстры появляются за ареной
+        и могут спокойно вступать на неё."""
         for boss in self.active_bosses:
             if not getattr(boss, 'arena_active', False) or not boss.alive:
                 continue
@@ -1436,21 +1565,13 @@ class Game:
                     self.player.slide_direction_y = -ny
                     self.player.slide_angle = math.atan2(-ny, -nx)
 
-            # ── Ограничить врагов ──
-            for enemy in self.enemies:
-                if enemy is boss or not enemy.alive:
-                    continue
-
-                edx = enemy.x - boss.arena_center_x
-                edy = enemy.y - boss.arena_center_y
-                edist = math.sqrt(edx * edx + edy * edy)
-                elimit = BOSS_ARENA_RADIUS - enemy.size
-
-                if edist > elimit and edist > 0:
-                    enx = edx / edist
-                    eny = edy / edist
-                    enemy.x = boss.arena_center_x + enx * elimit
-                    enemy.y = boss.arena_center_y + eny * elimit
+    def active_boss_arena(self):
+        """Активная арена босса (центр и радиус) или None."""
+        for boss in self.enemies:
+            if (getattr(boss, 'is_boss', False) and boss.alive
+                    and getattr(boss, 'arena_active', False)):
+                return (boss.arena_center_x, boss.arena_center_y, BOSS_ARENA_RADIUS)
+        return None
 
     # ================================================================
     # ОБНОВЛЕНИЕ ВРАГОВ
@@ -1574,7 +1695,7 @@ class Game:
                               knockback_force=0, knockback_dir_x=0, knockback_dir_y=0,
                               can_crit=True, can_stun=True, can_lifesteal=True,
                               particle_color=None, particle_count=5,
-                              source="fist"):
+                              source="fist", magnetize_xp=False):
         """
         Единая логика нанесения урона врагу.
         Обрабатывает: крит, стан, вампиризм, откид, частицы, убийство.
@@ -1645,7 +1766,7 @@ class Game:
 
         # Убийство
         if killed:
-            self.on_enemy_killed(enemy)
+            self.on_enemy_killed(enemy, magnetize_xp=magnetize_xp)
 
         return killed, damage, is_crit
 
@@ -1664,6 +1785,9 @@ class Game:
         attack_angle = attack["angle"]
         attack_arc = attack["arc"]
         base_damage = attack["damage"]
+        # Прорубающий удар бьёт всех вокруг, но слабее обычного
+        if attack["cleave"]:
+            base_damage *= CLEAVE_DAMAGE_MULTIPLIER
         knockback = attack["knockback"]
         is_finisher = attack["is_finisher"]
         is_mega = attack.get("is_mega", False)
@@ -1911,6 +2035,9 @@ class Game:
         for enemy in self.enemies:
             if not enemy.alive:
                 continue
+            # Один враг получает урон от одного скольжения не чаще раза в SLIDE_HIT_COOLDOWN
+            if self.player.slide_hit_timers.get(id(enemy), 0) > 0:
+                continue
 
             dx = enemy.x - self.player.x
             dy = enemy.y - self.player.y
@@ -1938,6 +2065,7 @@ class Game:
                 particle_color=CYAN, particle_count=8,
                 source="slide"
             )
+            self.player.slide_hit_timers[id(enemy)] = SLIDE_HIT_COOLDOWN
 
     # ================================================================
     # КОНТРАТАКА
@@ -2073,7 +2201,7 @@ class Game:
                         )
 
                     if killed:
-                        self.on_enemy_killed(enemy)
+                        self.on_enemy_killed(enemy, magnetize_xp=True)
 
     # ================================================================
     # КОНТАКТНЫЙ УРОН ВРАГОВ
@@ -2109,7 +2237,7 @@ class Game:
     # ================================================================
     # СМЕРТЬ ВРАГА
     # ================================================================
-    def on_enemy_killed(self, enemy):
+    def on_enemy_killed(self, enemy, magnetize_xp=False):
         """Обработка убийства врага"""
         self.player.enemies_killed += 1
         self.player.add_combo()
@@ -2132,8 +2260,10 @@ class Game:
             enemy.x, enemy.y, enemy.color, count=death_particles
         )
 
-        # Выпадение опыта
+        # Выпадение опыта (умершие от молнии магнитят опыт к игроку)
         xp_orb = XPOrb(enemy.x, enemy.y, enemy.xp_reward)
+        if magnetize_xp:
+            xp_orb.being_collected = True
         self.xp_orbs.append(xp_orb)
 
         # Шанс сброса КД скольжения
@@ -2234,7 +2364,8 @@ class Game:
     def update_items(self, dt):
         """Обновить предметы на земле"""
         for item in self.dropped_items:
-            result = item.update(dt, self.player.x, self.player.y)
+            result = item.update(dt, self.player.x, self.player.y,
+                                 pull=self.slider_ultimate is not None)
             if result:
                 self.apply_item_effect(result)
 
@@ -2296,6 +2427,9 @@ class Game:
             message = t("MSG_BOMB", killed_count)
             if self.player.extend_active_combo(BOMB_COMBO_EXTENSION):
                 message += " " + t("MSG_COMBO_EXTENDED", int(BOMB_COMBO_EXTENSION))
+            # Каждое убийство бомбой даёт очки комбо
+            for _ in range(killed_count):
+                self.player.add_combo()
             self.particle_manager.add_message(message, RED)
             self.camera.add_shake(SHAKE_BOMB)
 
@@ -2365,6 +2499,16 @@ class Game:
     # ================================================================
     def despawn_far_enemies(self):
         """Удалить врагов и XP сферы, которые слишком далеко"""
+        # Во время босса ориентируемся на центр арены: монстры появляются
+        # за её пределами и не должны исчезать сразу после спавна.
+        arena = self.active_boss_arena()
+        if arena is not None:
+            ref_x, ref_y, _ = arena
+            limit = BOSS_ARENA_RADIUS + 700
+        else:
+            ref_x, ref_y = self.player.x, self.player.y
+            limit = ENEMY_DESPAWN_RADIUS
+
         new_enemies = []
         for enemy in self.enemies:
             if not enemy.alive:
@@ -2375,11 +2519,11 @@ class Game:
                 new_enemies.append(enemy)
                 continue
 
-            dx = enemy.x - self.player.x
-            dy = enemy.y - self.player.y
+            dx = enemy.x - ref_x
+            dy = enemy.y - ref_y
             dist = math.sqrt(dx * dx + dy * dy)
 
-            if dist <= ENEMY_DESPAWN_RADIUS:
+            if dist <= limit:
                 new_enemies.append(enemy)
 
         self.enemies = new_enemies
@@ -2387,10 +2531,13 @@ class Game:
         # Деспавн далёких XP сфер
         new_orbs = []
         for orb in self.xp_orbs:
-            dx = orb.x - self.player.x
-            dy = orb.y - self.player.y
+            if orb.being_collected:
+                new_orbs.append(orb)
+                continue
+            dx = orb.x - ref_x
+            dy = orb.y - ref_y
             dist = math.sqrt(dx * dx + dy * dy)
-            if dist < ENEMY_DESPAWN_RADIUS + 200:
+            if dist < limit + 200:
                 new_orbs.append(orb)
         self.xp_orbs = new_orbs
 
@@ -2482,6 +2629,7 @@ class Game:
         # Игрок
         self.player.draw(self.screen, self.camera)
         self._draw_spark_storm_weather()
+        self._draw_spark_player_glow()
         self._draw_ultimate_world_effects()
 
         # Частицы и числа урона

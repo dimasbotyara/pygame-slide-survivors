@@ -17,6 +17,7 @@ class XPOrb:
         self.alive = True
         self.being_collected = False
         self.speed = 0.0
+        self.fly_time = 0.0
         self.anim_timer = random.random() * 10
 
         # Небольшой разброс при появлении
@@ -52,8 +53,12 @@ class XPOrb:
             self.being_collected = True
 
         if self.being_collected:
-            # Лететь к игроку
-            self.speed = XP_ORB_SPEED
+            # Лететь к игроку: чем дольше сфера летит, тем быстрее она летит
+            self.fly_time += dt
+            self.speed = min(
+                XP_ORB_MAX_SPEED,
+                XP_ORB_SPEED + XP_ORB_ACCELERATION * self.fly_time
+            )
             if dist > 0:
                 self.x += (dx / dist) * self.speed * dt
                 self.y += (dy / dist) * self.speed * dt
@@ -112,7 +117,7 @@ class DroppedItem:
             self.color = CYAN
             self.secondary_color = WHITE
 
-    def update(self, dt, player_x, player_y):
+    def update(self, dt, player_x, player_y, pull=False):
         if not self.alive:
             return None
 
@@ -127,6 +132,12 @@ class DroppedItem:
         dx = player_x - self.x
         dy = player_y - self.y
         dist = math.sqrt(dx * dx + dy * dy)
+
+        # Подтягивание к игроку (например, во время ультимейта Слайдера)
+        if pull and dist > 25 and dist < 340 and dist > 0:
+            pull_speed = 640
+            self.x += (dx / dist) * pull_speed * dt
+            self.y += (dy / dist) * pull_speed * dt
 
         if dist < 25:
             self.alive = False

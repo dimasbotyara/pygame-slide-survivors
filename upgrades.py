@@ -160,7 +160,7 @@ class UpgradeManager:
         if not available:
             available = [u for u in self.all_upgrades if u.max_level is None]
 
-        weights = [self._get_weight(u, luck_bonus) for u in available]
+        weights = [self._get_weight(u, luck_bonus, hero_id) for u in available]
         num = min(num_choices, len(available))
         self.choices = []
         total_weight = sum(weights)
@@ -184,7 +184,7 @@ class UpgradeManager:
         self.choosing = True
         self.selected_index = 0
 
-    def _get_weight(self, upgrade, luck_bonus):
+    def _get_weight(self, upgrade, luck_bonus, hero_id="slider"):
         weights = {"hero": 120 + luck_bonus * 2, "basic": 100, "fist": 65 + luck_bonus, "slide": 65 + luck_bonus, "utility": 55 + luck_bonus}
         w = weights.get(upgrade.category, 70)
         rare = ["fist_combo_hits", "fist_ground_slam", "fist_counter", "fist_wave", "fist_xp_pull",
@@ -192,6 +192,15 @@ class UpgradeManager:
                 "shield_wall", "orbital_blade", "executioner"]
         if upgrade.upgrade_id in rare:
             w = 40 + luck_bonus * 2
+        # Слайдер — хозяин скольжения: крутые слайд-улучшения падают ему чаще.
+        # Остальным скольжение нужно в основном для передвижения.
+        if upgrade.category == "slide":
+            if hero_id == "slider":
+                w = int(w * 2.4)
+                if upgrade.upgrade_id in rare:
+                    w = int(w * 1.5)
+            else:
+                w = int(w * 0.75)
         return max(1, w)
 
     def select_upgrade(self, index, player):
